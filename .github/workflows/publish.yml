@@ -1,6 +1,8 @@
 name: Publish
 
 on:
+  repository_dispatch:
+    types: [upstream-published]
   push:
     branches: [main]
   pull_request:
@@ -26,8 +28,14 @@ jobs:
           server-username: GITHUB_ACTOR
           server-password: GITHUB_TOKEN
 
-      - name: Build and publish
-        run: mvn --batch-mode deploy ${{ github.event_name == 'pull_request' && '-DskipTests' || '' }}
+      - name: Build and test
+        if: github.event_name == 'pull_request'
+        run: mvn --batch-mode install
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_PAT: ${{ secrets.GH_PAT }}
+
+      - name: Publish to GitHub Packages
+        if: github.event_name != 'pull_request'
+        run: mvn --batch-mode deploy -DskipTests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
