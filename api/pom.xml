@@ -14,7 +14,34 @@
 
   <name>CaseHub Life :: API</name>
   <description>Life automation domain model — pure Java, no Quarkus, no JPA.
-    LifeDomain enum, HouseholdTask, LifeGoal, LifeEvent records, actor type constants,
-    capability tag constants, trust dimension constants, external actor model.</description>
+    LifeDomain enum, actor type constants, capability tag constants, trust dimension
+    constants, task/goal status enums.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <includes>
+            <include>**/*Test.java</include>
+          </includes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
 
 </project>
