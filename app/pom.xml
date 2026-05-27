@@ -82,28 +82,10 @@
 
     <!-- ================================================================ -->
     <!-- Layer 5: casehub-engine — multi-step CasePlanModel workflows     -->
+    <!-- Added in Layer 5 branch. The 0.2-SNAPSHOT has a broken internal  -->
+    <!-- package refactor (engine#379, engine#380) that breaks Quarkus    -->
+    <!-- augmentation via VertxProcessor. Layer 2 does not need engine.   -->
     <!-- ================================================================ -->
-    <dependency>
-      <groupId>io.casehub</groupId>
-      <artifactId>casehub-engine</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.casehub</groupId>
-      <artifactId>casehub-engine-work-adapter</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.casehub</groupId>
-      <artifactId>casehub-engine-scheduler-quartz</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.casehub</groupId>
-      <artifactId>casehub-engine-persistence-memory</artifactId>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.casehub</groupId>
-      <artifactId>casehub-engine-persistence-hibernate</artifactId>
-    </dependency>
 
     <!-- ================================================================ -->
     <!-- Connectors — household notifications (contractor, carer alerts)   -->
@@ -147,11 +129,6 @@
     <dependency>
       <groupId>io.casehub</groupId>
       <artifactId>casehub-qhorus-testing</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.casehub</groupId>
-      <artifactId>casehub-engine-testing</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
