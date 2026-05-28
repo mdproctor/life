@@ -4,7 +4,7 @@ import io.casehub.life.api.LifeActorType;
 import io.casehub.life.api.request.CreateExternalActorRequest;
 import io.casehub.life.api.request.UpdateExternalActorRequest;
 import io.casehub.life.api.response.ExternalActorResponse;
-import io.casehub.life.app.entity.LifeTaskContext;
+import io.casehub.life.api.response.LifeTaskContextResponse;
 import io.casehub.life.app.service.ExternalActorService;
 import io.smallrye.common.annotation.Blocking;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -73,7 +73,7 @@ public class ExternalActorResource {
         if (service.findById(id).isEmpty()) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
-        final List<LifeTaskContext> tasks = service.listTasks(id);
+        final List<LifeTaskContextResponse> tasks = service.listTasks(id);
         return Response.ok(tasks).build();
     }
 }

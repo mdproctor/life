@@ -4,6 +4,7 @@ import io.casehub.life.api.LifeActorType;
 import io.casehub.life.api.request.CreateExternalActorRequest;
 import io.casehub.life.api.request.UpdateExternalActorRequest;
 import io.casehub.life.api.response.ExternalActorResponse;
+import io.casehub.life.api.response.LifeTaskContextResponse;
 import io.casehub.life.app.entity.ExternalActor;
 import io.casehub.life.app.entity.LifeTaskContext;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -65,8 +66,11 @@ public class ExternalActorService {
         actor.delete();
     }
 
-    public List<LifeTaskContext> listTasks(final UUID actorId) {
-        return LifeTaskContext.list("externalActorId", actorId);
+    public List<LifeTaskContextResponse> listTasks(final UUID actorId) {
+        return LifeTaskContext.<LifeTaskContext>list("externalActorId", actorId)
+                .stream()
+                .map(c -> new LifeTaskContextResponse(c.workItemId, c.domain, c.externalActorId, c.recurrence))
+                .toList();
     }
 
     private ExternalActorResponse toResponse(final ExternalActor actor) {

@@ -1,7 +1,14 @@
 package io.casehub.life.app;
 
+import io.casehub.work.runtime.model.WorkItemPriority;
+import io.casehub.work.runtime.model.WorkItemTemplate;
 import io.quarkus.test.junit.QuarkusTest;
+import jakarta.transaction.Transactional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
@@ -17,6 +24,23 @@ class ExternalActorResourceTest {
               "contactValue": "+44-7700-900001"
             }
             """;
+
+    @BeforeEach
+    @Transactional
+    void seedTemplate() {
+        if (WorkItemTemplate.find("name", "household-task").count() == 0) {
+            WorkItemTemplate t = new WorkItemTemplate();
+            t.id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+            t.name = "household-task";
+            t.category = "household";
+            t.priority = WorkItemPriority.MEDIUM;
+            t.candidateGroups = "household-member";
+            t.defaultExpiryHours = 24;
+            t.createdBy = "life-system";
+            t.createdAt = Instant.now();
+            t.persist();
+        }
+    }
 
     @Test
     void createActor_returnsCreatedWithId() {
@@ -119,25 +143,31 @@ class ExternalActorResourceTest {
 
     @Test
     void deleteActor_referencedByTask_returns409() {
-        // This test is deferred to Task 12 (LifeTaskResourceTest) where
-        // the full /life-tasks endpoint and LifeTaskContext persistence are in place.
-        // For now, verify the delete endpoint works for unreferenced actors.
         String actorId = given()
                 .contentType("application/json")
-                .body(ACTOR_JSON.formatted("ref"))
+                .body(ACTOR_JSON.formatted("ref409"))
                 .when().post("/external-actors")
                 .then().statusCode(201)
                 .extract().path("id");
 
-        // No tasks reference this actor — delete succeeds.
+        // Create a life task referencing this actor — establishes LifeTaskContext row.
+        given()
+                .contentType("application/json")
+                .body("""
+                        {"templateRef":"household-task","title":"Fix boiler","externalActorId":"%s"}
+                        """.formatted(actorId))
+                .when().post("/life-tasks")
+                .then().statusCode(201);
+
+        // Delete must be blocked — LifeTaskContext referential integrity guard fires.
         given()
                 .when().delete("/external-actors/{id}", actorId)
                 .then()
-                .statusCode(204);
+                .statusCode(409);
     }
 
     @Test
-    void listActorTasks_returnsEmptyForNewActor() {
+    void listActorTasks_returnsTasksForActor() {
         String actorId = given()
                 .contentType("application/json")
                 .body(ACTOR_JSON.formatted("tasks"))
@@ -146,9 +176,18 @@ class ExternalActorResourceTest {
                 .extract().path("id");
 
         given()
+                .contentType("application/json")
+                .body("""
+                        {"templateRef":"household-task","title":"Boiler repair","externalActorId":"%s"}
+                        """.formatted(actorId))
+                .when().post("/life-tasks")
+                .then().statusCode(201);
+
+        given()
                 .when().get("/external-actors/{id}/tasks", actorId)
                 .then()
                 .statusCode(200)
-                .body("size()", equalTo(0));
+                .body("size()", equalTo(1))
+                .body("[0].externalActorId", equalTo(actorId));
     }
 }
