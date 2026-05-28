@@ -1,14 +1,14 @@
 package io.casehub.life.app.service;
 
 import io.casehub.life.api.LifeActorType;
-import io.casehub.life.api.model.HouseholdTaskStatus;
+import io.casehub.life.api.request.CreateExternalActorRequest;
+import io.casehub.life.api.request.UpdateExternalActorRequest;
+import io.casehub.life.api.response.ExternalActorResponse;
 import io.casehub.life.app.entity.ExternalActor;
-import io.casehub.life.app.entity.HouseholdTask;
+import io.casehub.life.app.entity.LifeTaskContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
-import jakarta.ws.rs.ClientErrorException;
 import jakarta.ws.rs.NotFoundException;
-import jakarta.ws.rs.core.Response;
 
 import java.util.List;
 import java.util.Optional;
@@ -18,52 +18,59 @@ import java.util.UUID;
 public class ExternalActorService {
 
     @Transactional
-    public ExternalActor create(final ExternalActor actor) {
+    public ExternalActorResponse create(final CreateExternalActorRequest req) {
+        final ExternalActor actor = new ExternalActor();
+        actor.name = req.name();
+        actor.actorType = req.actorType();
+        actor.contactMethod = req.contactMethod();
+        actor.contactValue = req.contactValue();
         actor.persist();
-        return actor;
+        return toResponse(actor);
     }
 
-    public Optional<ExternalActor> findById(final UUID id) {
-        return ExternalActor.findByIdOptional(id);
+    public Optional<ExternalActorResponse> findById(final UUID id) {
+        return ExternalActor.<ExternalActor>findByIdOptional(id).map(this::toResponse);
     }
 
-    public List<ExternalActor> list(final LifeActorType actorType) {
-        if (actorType != null) {
-            return ExternalActor.list("actorType", actorType);
-        }
-        return ExternalActor.listAll();
+    public List<ExternalActorResponse> list(final LifeActorType actorType) {
+        List<ExternalActor> actors = actorType != null
+                ? ExternalActor.list("actorType", actorType)
+                : ExternalActor.listAll();
+        return actors.stream().map(this::toResponse).toList();
     }
 
     @Transactional
-    public Optional<ExternalActor> update(final UUID id, final ExternalActor update) {
+    public Optional<ExternalActorResponse> update(final UUID id, final UpdateExternalActorRequest req) {
         return ExternalActor.<ExternalActor>findByIdOptional(id).map(existing -> {
-            existing.name = update.name;
-            existing.actorType = update.actorType;
-            existing.contactMethod = update.contactMethod;
-            existing.contactValue = update.contactValue;
-            return existing;
+            existing.name = req.name();
+            existing.actorType = req.actorType();
+            existing.contactMethod = req.contactMethod();
+            existing.contactValue = req.contactValue();
+            return toResponse(existing);
         });
     }
 
-    /** Deletes the actor. Throws NotFoundException (404) if absent, ClientErrorException (409)
-     *  if tasks reference it. Check and delete in one transaction to avoid TOCTOU. */
     @Transactional
     public void delete(final UUID id) {
         final ExternalActor actor = ExternalActor.<ExternalActor>findByIdOptional(id)
                 .orElseThrow(NotFoundException::new);
-        final long referencingTasks = HouseholdTask.count("externalActorId", id);
-        if (referencingTasks > 0) {
-            throw new ClientErrorException(
-                    "ExternalActor is referenced by " + referencingTasks + " task(s)",
-                    Response.Status.CONFLICT);
-        }
+        // LifeTaskContext referential integrity check enabled in Task 5 once entity is mapped.
         actor.delete();
     }
 
-    public List<HouseholdTask> listTasks(final UUID actorId, final HouseholdTaskStatus status) {
-        if (status != null) {
-            return HouseholdTask.list("externalActorId = ?1 and status = ?2", actorId, status);
-        }
-        return HouseholdTask.list("externalActorId", actorId);
+    public List<LifeTaskContext> listTasks(final UUID actorId) {
+        // LifeTaskContext query enabled in Task 5 once entity is mapped.
+        return List.of();
+    }
+
+    private ExternalActorResponse toResponse(final ExternalActor actor) {
+        return new ExternalActorResponse(
+                actor.id,
+                actor.name,
+                actor.actorType,
+                actor.contactMethod,
+                actor.contactValue,
+                actor.createdAt
+        );
     }
 }
