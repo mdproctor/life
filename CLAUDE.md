@@ -237,10 +237,10 @@ Read these **before designing**, not after. The concern column tells you when ea
 
 **Life domain entities:**
 - `LifeDomain` enum — `HOUSEHOLD`, `HEALTH`, `FINANCE`, `FAMILY_SCHEDULING`, `TRAVEL`, `LEGAL`, `CONTRACTOR_COORDINATION`, `ELDER_CARE`
-- `HouseholdTask` — a tracked household obligation: `{domain, description, assignee, dueDate, recurrence, slaHours}`
-- `LifeGoal` — a medium-to-long-term goal tracked with milestones and sub-tasks
-- `LifeEvent` — a scheduled event with obligations and required acknowledgements
-- `ExternalActor` — contractor, doctor, service provider, or institution: `{actorId, actorType, contactDetails, trustDimensions}`
+- `ExternalActor` — contractor, doctor, service provider, or institution: `{name, actorType, contactMethod, contactValue}` — the one genuine JPA domain entity
+- `LifeTaskContext` — domain supplement for foundation WorkItems: `{workItemId, domain, externalActorId, recurrence}` — carries life-specific context that has no foundation home
+
+Note: `HouseholdTask`, `LifeGoal`, `LifeEvent` were removed in Layer 2 — they duplicated foundation primitives (WorkItem, CaseInstance, LedgerEntry). See `docs/specs/2026-05-27-layer2-casehub-work-sla.md` and parent#79.
 
 **Capability tags:**
 - `household-management` — routine household coordination: grocery ordering, maintenance scheduling, contractor liaison
@@ -291,12 +291,14 @@ Everything in the foundation:
 ## Module Structure
 
 ```
-api/    — pure Java: LifeDomain enum, HouseholdTask records, LifeGoal, LifeEvent,
-          ExternalActor, capability tag constants, trust dimension constants.
+api/    — pure Java: LifeDomain enum, ExternalActor request/response records,
+          CreateLifeTaskRequest, LifeTaskResponse, LifeTaskContextResponse,
+          capability tag constants, trust dimension constants.
           Zero framework imports. No JPA.
 
-app/    — Quarkus: JPA entities, REST resources, Flyway migrations,
-          service layer, CasePlanModel YAML definitions.
+app/    — Quarkus: JPA entities (ExternalActor, LifeTaskContext), REST resources,
+          Flyway migrations (db/life/migration/), service layer,
+          SPI implementations (LifeSlaBreachPolicy), CasePlanModel YAML definitions.
 ```
 
 ---
@@ -306,12 +308,17 @@ app/    — Quarkus: JPA entities, REST resources, Flyway migrations,
 Each layer corresponds to a foundation module adoption step. LAYER-LOG.md tracks completion — a layer is not done until the entry is written.
 
 ```
-Layer 1: Naive Java — household domain model (LifeDomain, HouseholdTask, ExternalActor),
-         REST API, no accountability, no audit. Gap comments show what breaks when
-         a contractor misses a deadline or a health follow-up is silently dropped.
+Layer 1: Naive Java — ExternalActor domain entity, REST API, no accountability, no audit.
+         Gap comments show what breaks when a contractor misses a deadline or a health
+         follow-up is silently dropped. Note: HouseholdTask/LifeGoal/LifeEvent entities
+         introduced here were removed in Layer 2 (duplicated foundation primitives — parent#79).
+         ✅ COMPLETE
 
-Layer 2: + casehub-work — SLA enforcement: grocery deadlines, appointment booking,
-         contractor task deadlines. WorkItem with claimDeadline replaces best-effort reminder.
+Layer 2: + casehub-work — SLA enforcement via WorkItemTemplate + LifeTaskContext supplement.
+         POST /life-tasks creates WorkItem + LifeTaskContext atomically. LifeSlaBreachPolicy
+         enforces stateless two-tier escalation. Flyway at db/life/migration/.
+         Note: casehub-engine deps removed until SNAPSHOT is fixed (engine#379, engine#380).
+         ✅ COMPLETE
 
 Layer 3: + casehub-qhorus — commitment lifecycle: family delegation (COMMAND to household-member),
          contractor follow-up (COMMAND + Watchdog), oversight gates for major financial decisions
@@ -352,6 +359,10 @@ Layer 7: + casehub-openclaw — OpenClaw as WorkerProvisioner; pre-built skill e
 
 - **PP-20260524-a8f597** — casehub-platform scope rule: when to add `casehub-platform` and `casehub-platform-expression` as dependencies
 - **PP-20260524-10efef** — Flyway ledger locations: add `classpath:db/ledger/migration` when casehub-ledger is active
+- **PP-20260525-607b33** — Flyway repo-scoped path: life domain migrations at `db/life/migration/`
+- **PP-20260527-da1f66** — domain supplement pattern: attach domain context to foundation primitives via supplement table, not wrapper entity
+- **PP-20260526-d0b921** — REST resources must be `@Blocking @ApplicationScoped`
+- **PP-20260526-75d9c9** — `@Transactional` on service methods only, never resource methods
 - **dual-trail-audit-pattern.md** — operational trail (casehub-work/qhorus) vs compliance ledger (casehub-ledger)
 - **auth-retrofit-readiness.md** — auth not yet wired to internal services; design for retrofit
 - **alternative-extension-patterns.md** — `@Alternative` CDI patterns for SPI wiring
@@ -383,7 +394,9 @@ JAVA_HOME=/Library/Java/JavaVirtualMachines/graalvm-25.jdk/Contents/Home  # nati
 **Multi-module test scoping:** Always scope Maven with `-pl <module> -am`. When combining `-am` with `-Dtest=ClassName`, add `-Dsurefire.failIfNoSpecifiedTests=false`.
 
 **Flyway critical rules:**
-- Domain migrations must start at **V100** — casehub-work occupies V1–V21+
+- Life domain migrations live at `db/life/migration/` (PP-20260525-607b33) — V100+
+- Production locations: `classpath:db/life/migration,classpath:db/work/migration`
+- casehub-work occupies V1–V31; life starts at V100. V-ranges don't overlap.
 - Add `classpath:db/ledger/migration` when casehub-ledger is active (PP-20260524-10efef)
 - Add `classpath:db/qhorus/migration` when casehub-qhorus is active
 
@@ -407,7 +420,7 @@ JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn --batch-mode install -pl app
 JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn --batch-mode install
 
 # Test a single class (app)
-JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn test -pl app -Dtest=HouseholdTaskResourceTest --batch-mode
+JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn test -pl app -Dtest=ExternalActorResourceTest --batch-mode
 
 # Compile only (no tests)
 JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn compile -pl api,app --batch-mode

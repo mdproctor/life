@@ -24,6 +24,12 @@ of consumer product vs developer showcase is noted and does not foreclose either
 
 ## Layer 1 — Domain baseline (no CaseHub foundation)
 
+> **Redesign note (2026-05-27):** The Layer 1 entities `HouseholdTask`, `LifeGoal`, and
+> `LifeEvent` were removed in Layer 2 — they duplicated foundation primitives (see
+> `docs/specs/2026-05-27-layer2-casehub-work-sla.md` §Context and design pivot and parent#79).
+> This entry documents the original Layer 1 baseline and the accountability gaps it showed.
+> The Layer 2 spec describes the corrected domain model.
+
 **Status:** Complete
 **Issue:** casehubio/life#2
 **Navigation:** `git log --grep="#2" --oneline`
@@ -113,29 +119,65 @@ These gaps are what the subsequent layers close, one foundation module at a time
 
 ## Layer 2 — + casehub-work (SLA enforcement)
 
-**Status:** Pending
-**Issue:** casehubio/life#3
-**Navigation:** `git log --grep="#3" --oneline` (fill in at layer close)
+**Status:** Complete  
+**Completed:** 2026-05-27
 
-### What it shows
+### Summary
 
-Integrates `casehub-work` to create formal WorkItems with deadlines for household tasks that
-matter. A grocery order with a Wednesday deadline. A boiler service booking with a 14-day SLA.
-A contractor task with a follow-up deadline. The platform escalates if the deadline passes —
-the household app does not need to know how.
+casehub-work WorkItems are created alongside `LifeTaskContext` supplements when life-domain tasks are created via `POST /life-tasks`. `LifeSlaBreachPolicy` implements two-tier stateless SLA escalation: first breach escalates to `household-admin`; second breach terminates terminally. Flyway migrations moved to `db/life/migration/` (PP-20260525-607b33). The `HouseholdTask`, `LifeGoal`, and `LifeEvent` wrapper entities were removed; their fields map to foundation primitives with no data loss.
 
 ### Accountability gaps closed
 
-- No SLA on household tasks → `WorkItem.claimDeadline` enforces the deadline
-- No escalation path → casehub-work fires escalation automatically on breach
-- No formal human task inbox → WorkItem provides a structured inbox per principal
+| Gap | What breaks without it | Closed by |
+|-----|----------------------|-----------|
+| Contractor deadline passes silently | No escalation, no audit | WorkItem + LifeSlaBreachPolicy |
+| Health follow-up silently overdue | SLA breach has no effect | ExpiryLifecycleService + policy |
+| ExternalActor deleted while referenced | Dangling FK in supplement | LifeTaskContext referential guard |
 
-### Key wiring (planned)
+### Key wiring
 
-- `HouseholdTaskService.createTask()` → `WorkItemCreateRequest` with `claimDeadline` alongside `task.persist()`
-- `casehub-work-api` in `api/pom.xml` (safe — pure Java, no JPA)
-- `casehub-work` in `app/pom.xml`
-- Flyway: domain migrations remain at V100+; casehub-work occupies V1–V21+
+- `ExpiryLifecycleService` must NOT be in `quarkus.arc.exclude-types` in test config — inject and call `checkExpired()` directly to test SLA enforcement.
+- `LifeTaskService.create()` is `@Transactional` — WorkItem and LifeTaskContext created atomically because `WorkItemService.create()` uses `REQUIRED` semantics.
+- Template seeding: `V102__life_workitem_template_seeds.sql` runs in production; tests seed via `@BeforeEach @Transactional` using direct `WorkItemTemplate.persist()`.
+- `candidateGroups` is NOT exposed on `CreateLifeTaskRequest` — groups come from the template exclusively to prevent tier detection bugs in `LifeSlaBreachPolicy`.
+- `WorkItemPriority` enum has no `NORMAL` value — use `MEDIUM` for default priority.
+- Layer 5 engine dependencies removed from pom.xml — `casehub-engine` 0.2-SNAPSHOT has a broken internal package refactor (casehubio/engine#379, casehubio/engine#380) that breaks Quarkus augmentation via VertxProcessor. Engine deps re-added in Layer 5 branch once fixed.
+
+### Architectural decisions
+
+- `LifeTaskContext` is a domain context entity (not a WorkItem wrapper): carries only fields with no foundation equivalent (`domain`, `externalActorId`, `recurrence`). Does not duplicate `title`, `deadline`, `status`, `assignedTo` — those live in WorkItem.
+- Tier detection in `LifeSlaBreachPolicy` uses `candidateGroups.contains("household-admin")` — safe because callers cannot set groups.
+- `HouseholdTask`, `LifeGoal`, `LifeEvent` entities removed — they duplicated foundation primitives (WorkItem, CaseInstance, LedgerEntry). Rationale in `docs/specs/2026-05-27-layer2-casehub-work-sla.md`.
+
+### Pattern introduced
+
+**WorkItem-backed life task with domain supplement:** `LifeTaskService` creates a `WorkItem` from a named `WorkItemTemplate` and a `LifeTaskContext` supplement in a single `@Transactional` boundary. The template provides candidateGroups and SLA; the supplement carries life-domain context.
+
+### Pattern anchor
+
+- `LifeTaskService#create()` — WorkItem + supplement creation
+- `LifeSlaBreachPolicy#onBreach()` — stateless tier detection
+
+### Gotchas
+
+- `ExpiryLifecycleService` excluded from CDI in tests (Layer 1) to prevent scheduler interference — re-enabled in Layer 2 for direct injection in SLA tests.
+- `WorkItemTemplate.defaultExpiryHours` (from V5 `default_expiry_hours`) is used in `LifeTaskService` — do NOT use `defaultExpiryBusinessHours` (separate column, not seeded in V102).
+- `@Transactional @BeforeEach` for template seeding works in Quarkus @QuarkusTest.
+- `Response.Status.UNPROCESSABLE_ENTITY` does not exist in the JAX-RS version in use — use raw integer 422 in `WebApplicationException(message, 422)`.
+- `casehub-engine` 0.2-SNAPSHOT has broken internal package references — remove engine deps until SNAPSHOT is fixed (engine#379, engine#380).
+
+### Pattern to replicate
+
+1. Define `WorkItemTemplate` seeds in `V1NN__<app>_workitem_template_seeds.sql` with domain-specific `category`, `candidate_groups`, and `default_expiry_hours`.
+2. Create `<Domain>TaskService` with `@Transactional create()` that: resolves template by name (422 if absent), validates optional actor FK (422 if not found), validates non-null `candidateGroups` (GE-20260522-4e806e), builds `WorkItemCreateRequest` with `callerRef` and `scope`, calls `WorkItemService.create()`, persists domain supplement.
+3. Implement `SlaBreachPolicy` using stateless tier detection via `candidateGroups` (GE-20260522-f7db12). Do NOT allow callers to set `candidateGroups` — the policy's tier detection depends on template groups being the only initial groups.
+4. In tests: re-enable `ExpiryLifecycleService` in CDI, inject it, call `checkExpired()` directly with past-deadline WorkItems to verify breach fires without scheduler dependency.
+
+### Navigation
+
+```bash
+git log --grep="#3" --oneline
+```
 
 ---
 
