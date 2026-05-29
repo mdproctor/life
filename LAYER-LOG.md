@@ -183,20 +183,77 @@ git log --grep="#3" --oneline
 
 ## Layer 3 — + casehub-qhorus (commitment lifecycle)
 
-**Status:** Pending
+**Status:** Complete
+**Completed:** 2026-05-29
 **Issue:** casehubio/life#4
-**Navigation:** `git log --grep="#4" --oneline` (fill in at layer close)
 
-### What it shows
+### Summary
 
-Integrates `casehub-qhorus` for formal COMMAND/RESPONSE commitment tracking. Family task
-delegation ("pick up kids at 3:30") becomes a COMMAND with a RESPONSE requirement and a
-Watchdog. External actor commitment tracking ("plumber committed to come Thursday") becomes a
-tracked obligation with automated follow-up via OpenClaw's messaging skill when the Watchdog fires.
+casehub-qhorus is adopted for formal COMMAND/RESPONSE commitment tracking across three household accountability patterns: family delegation, contractor follow-up, and oversight gates. A `LifeCommitmentRecord` supplement (parallel to `LifeTaskContext` from Layer 2) links life-domain commitment context to the native qhorus `Commitment` via `correlationId`. Three life-domain Qhorus channels are provisioned at startup: `life/delegation`, `life/oversight` (COMMAND+RESPONSE enforced), and `life/actor/{externalActorId}` (per-actor, contractor commitments). One APPROVAL_PENDING Watchdog per channel monitors for expired Commitments. Two new REST actions are added: `POST /life-tasks/{id}/commit` (delegation or contractor commitment) and `POST /life-oversight-gates` (pre-approval gate — WorkItem created only after household-admin RESPONSE).
 
-Oversight channel gates: any household decision above a configurable threshold (spend > £X,
-medical decision, legal action) routes to the oversight channel. Human RESPONSE required before
-any action proceeds.
+### Accountability gaps closed
+
+| Gap | What breaks without it | Closed by |
+|-----|----------------------|-----------|
+| "Plumber committed Thursday" is a mental note | No machine-tracked obligation; no follow-up if no-show | COMMAND on `life/actor/{id}` + APPROVAL_PENDING Watchdog |
+| Family delegation has no enforcement | "Pick up kids at 3:30" delegated verbally — no RESPONSE required, no Watchdog | COMMAND to `life/delegation` with deadline |
+| Major financial decision proceeds without gate | No oversight gate; spend can proceed before household-admin approves | COMMAND to `life/oversight`; WorkItem not created until RESPONSE |
+
+### Key wiring
+
+- `MessageService.dispatch()` is the sole enforcement gate — all three strategies call it; no bypass allowed (PP-20260523-a08b97). `actorType(ActorType.SYSTEM)` is required on every builder call or it throws `IllegalArgumentException` at `build()`.
+- `ChannelService.create()` does NOT register in `ChannelGateway` — both must be called, in that order (GE-20260526-5247f2).
+- `LifeChannelInitializer` is `@Transactional` on `onStart()` — channels and Watchdogs registered atomically at startup. `ensureActorChannel()` is also `@Transactional` for on-demand contractor channels.
+- `MessageDispatch.Builder` takes `channelId: UUID`, not channel name. Strategies call `channelInitializer.channelIdFor(DELEGATION_CHANNEL)` or `channelInitializer.ensureActorChannel(id)` to resolve UUID.
+- `LifeOversightResponseObserver.onMessage()` receives `MessageReceivedEvent` (not `Message`). Implements `MessageObserver` which is application-wide — channel name guard (`event.channelName().equals(OVERSIGHT_CHANNEL)`) is required.
+- `LifeWatchdogAlertObserver` uses `@ObservesAsync` — qhorus fires `WatchdogAlertEvent` via `fireAsync()`. Synchronous `@Observes` observers do NOT receive async events.
+- `WatchdogAlertEvent.notificationChannel()` returns the channel NAME string (from `Watchdog.notificationChannel`), not a UUID. Observer queries `LifeCommitmentRecord` by that name.
+- `LifeCommitmentService.applyCommitment()` validates XOR before strategy dispatch: exactly one of `delegateTo` or `externalActorId` must be non-null, and `deadline` is required. Returns 422 if malformed.
+- `CommitmentConflictException` (unchecked) maps to 409 at the resource layer. Duplicate delegation/contractor: `findByWorkItemId` guard. Duplicate oversight: partial unique index on (`delegate_to`) WHERE mode='OVERSIGHT' AND status='PENDING_RESPONSE'.
+- `LifeCommitmentRecord` is on the default datasource (life domain) — NOT the qhorus named datasource.
+- Template `life-escalation` (V104): seeded with `candidate_groups = 'household-admin'`, category = `household`. Required by `LifeWatchdogAlertObserver.createEscalationTask()` — seed in `@BeforeEach @Transactional` for tests that exercise the alert path.
+
+### Architectural decisions
+
+- `LifeCommitmentStrategy` SPI lives in `app/` not `api/` — the sealed context types reference JPA entities (`WorkItem`, `LifeTaskContext`, `ExternalActor`). Placing them in `api/` creates a circular Maven dependency. This SPI has no external consumers; CDI `Instance<LifeCommitmentStrategy>` collects all three implementations.
+- `OversightContext` carries no `WorkItem` — the oversight gate is pre-approval; no WorkItem exists until `LifeOversightResponseObserver` creates it on RESPONSE. This is the correct domain semantics: work that hasn't been approved yet is not a WorkItem.
+- `delegateTo` column repurposed as dedup key for OVERSIGHT mode (value is `title:templateRef` hash). A partial unique index enforces it at the DB level. Acknowledged semantic overload — a dedicated `oversight_key` column would be cleaner but was not added to avoid schema complexity.
+- Life channels are NOT normative qhorus mesh channels. The normative layout (`/work`, `/observe`, `/oversight` suffix convention) governs agent orchestration channels managed by Claudony's `NormativeChannelLayout` SPI. Life household channels are domain coordination channels with their own naming.
+- `LifeOversightResponseObserver` uses `@Transactional(REQUIRES_NEW)` — `MessageService.dispatch()` calls observers synchronously inside the qhorus dispatch transaction; the observer needs its own transaction to persist the new WorkItem and update the commitment record independently.
+
+### Gotchas
+
+- `MessageDispatch.Builder()` requires `.actorType()` — omitting it throws `IllegalArgumentException: actorType is required` at `build()`. Use `ActorType.SYSTEM` for life-system dispatches.
+- `WatchdogAlertEvent` has no `correlationId` field (checked bytecode) — it has `notificationChannel`, `watchdogId`, `firedAt`, and aggregate `context` (ApprovalPendingContext with `pendingCount` and `oldestExpiryAt`). The observer must query by channel name, not correlationId.
+- `ChannelGateway` is in `io.casehub.qhorus.runtime.gateway` — not `io.casehub.qhorus.runtime.channel`.
+- `DispatchResult.inReplyTo()` and `MessageDispatch.Builder.inReplyTo()` take `Long` (message sequence ID), not `UUID` (ledger entry ID). Use `commandResult.messageId()` for the RESPONSE builder.
+- casehub-work-api `SelectionContext` constructor signature changes between SNAPSHOTs. If tests fail with `NoSuchMethodError: SelectionContext.<init>(String...)`, reinstall casehub-work from source: `mvn install -DskipTests -pl api,core,deployment -am -f /path/to/casehub-work/pom.xml`.
+- `@ObservesAsync` in tests: `evaluateAll()` fires `WatchdogAlertEvent` asynchronously. Asserting the observer's result immediately after `evaluateAll()` races the async handler. Use Awaitility with a `@Transactional` helper method on the test class (required for the Panache query inside the Awaitility lambda).
+
+### Pattern introduced
+
+**Commitment strategy dispatch:** `LifeCommitmentService` collects `@ApplicationScoped` strategy implementations via `Instance<LifeCommitmentStrategy>`, asserts exactly one `applies()`, and executes it. The sealed context hierarchy (`DelegationContext`, `ContractorContext`, `OversightContext`) eliminates null-field documentation and NPE risk.
+
+**Oversight gate with deferred WorkItem creation:** `OversightGateStrategy` persists `LifeCommitmentRecord{workItemId=null, pendingTaskJson=...}` and dispatches COMMAND. `LifeOversightResponseObserver` creates the WorkItem on RESPONSE, sets `workItemId`, and marks FULFILLED.
+
+### Pattern anchor
+
+- `LifeChannelInitializer#ensureChannelWithWatchdog()` — idempotent channel + Watchdog registration
+- `LifeCommitmentService#applyCommitment()` — XOR validation + strategy dispatch
+- `OversightGateStrategy#execute()` — deferred WorkItem creation pattern
+- `LifeOversightResponseObserver#onMessage()` — RESPONSE-to-WorkItem bridge
+
+### Navigation
+
+```bash
+git log --grep="#4" --oneline
+```
+
+### Open follow-up
+
+- life#17 — `LifeWatchdogAlertObserver` escalation path needs integration test + Watchdog state isolation between @QuarkusTest classes
+- life#18 — REST resource consistency (@Produces/@Consumes on all resources, 201 for commitment creation)
+- life#16 — `docs/specs/life-automation.md` layer table is stale (wrong layer ordering)
 
 ---
 
