@@ -242,6 +242,11 @@ Read these **before designing**, not after. The concern column tells you when ea
 
 Note: `HouseholdTask`, `LifeGoal`, `LifeEvent` were removed in Layer 2 — they duplicated foundation primitives (WorkItem, CaseInstance, LedgerEntry). See `docs/specs/2026-05-27-layer2-casehub-work-sla.md` and parent#79.
 
+**Layer 3 additions:**
+- `LifeCommitmentRecord` — supplement to qhorus native `Commitment`, keyed by `correlationId`; tracks DELEGATION/CONTRACTOR/OVERSIGHT commitment mode and status. `workItemId` is null for OVERSIGHT until household-admin RESPONSE fulfills the gate.
+- `LifeCommitmentStrategy` — internal app/ SPI (not api/ — context types reference JPA entities); three implementations: `DelegationCommitmentStrategy`, `ContractorCommitmentStrategy`, `OversightGateStrategy`.
+- Channel topology: `life/delegation` (shared, family delegation), `life/oversight` (shared, COMMAND+RESPONSE only), `life/actor/{externalActorId}` (per-actor, contractor commitments). One APPROVAL_PENDING Watchdog per channel.
+
 **Capability tags:**
 - `household-management` — routine household coordination: grocery ordering, maintenance scheduling, contractor liaison
 - `health-coordination` — appointment booking, medication reminders, follow-up tracking, GP escalation
@@ -292,13 +297,16 @@ Everything in the foundation:
 
 ```
 api/    — pure Java: LifeDomain enum, ExternalActor request/response records,
-          CreateLifeTaskRequest, LifeTaskResponse, LifeTaskContextResponse,
+          CreateLifeTaskRequest, LifeTaskResponse, CommitmentMode/CommitmentStatus/
+          CommitmentOutcome/CommitmentRequest/OversightGateRequest (Layer 3),
           capability tag constants, trust dimension constants.
           Zero framework imports. No JPA.
 
-app/    — Quarkus: JPA entities (ExternalActor, LifeTaskContext), REST resources,
-          Flyway migrations (db/life/migration/), service layer,
-          SPI implementations (LifeSlaBreachPolicy), CasePlanModel YAML definitions.
+app/    — Quarkus: JPA entities (ExternalActor, LifeTaskContext, LifeCommitmentRecord),
+          REST resources, Flyway migrations (db/life/migration/), service layer,
+          SPI implementations (LifeSlaBreachPolicy, LifeCommitmentStrategy + 3 impls),
+          infrastructure (LifeChannelInitializer), observers (LifeOversightResponseObserver,
+          LifeWatchdogAlertObserver), CasePlanModel YAML definitions.
 ```
 
 ---
@@ -323,6 +331,7 @@ Layer 2: + casehub-work — SLA enforcement via WorkItemTemplate + LifeTaskConte
 Layer 3: + casehub-qhorus — commitment lifecycle: family delegation (COMMAND to household-member),
          contractor follow-up (COMMAND + Watchdog), oversight gates for major financial decisions
          (COMMAND to household-admin; no action until RESPONSE received).
+         ✅ COMPLETE
 
 Layer 4: + casehub-ledger — tamper-evident audit: health decisions, financial decisions,
          legal actions. GDPR Art.17 for personal data held about contractors and dependents.

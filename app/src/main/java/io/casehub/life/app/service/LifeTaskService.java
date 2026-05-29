@@ -1,9 +1,12 @@
 package io.casehub.life.app.service;
 
 import io.casehub.life.api.LifeDomain;
+import io.casehub.life.api.commitment.CommitmentMode;
+import io.casehub.life.api.commitment.CommitmentStatus;
 import io.casehub.life.api.request.CreateLifeTaskRequest;
 import io.casehub.life.api.response.LifeTaskResponse;
 import io.casehub.life.app.entity.ExternalActor;
+import io.casehub.life.app.entity.LifeCommitmentRecord;
 import io.casehub.life.app.entity.LifeTaskContext;
 import io.casehub.work.runtime.model.WorkItem;
 import io.casehub.work.runtime.model.WorkItemCreateRequest;
@@ -90,7 +93,30 @@ public class LifeTaskService {
                 domain,
                 workItem.status.name(),
                 req.externalActorId(),
-                workItem.createdAt
+                workItem.createdAt,
+                null, null  // commitmentMode / commitmentStatus — null at creation time
+        );
+    }
+
+    @Transactional
+    public LifeTaskResponse get(final java.util.UUID workItemId) {
+        final WorkItem workItem = WorkItem.findByIdOptional(workItemId)
+                .map(o -> (WorkItem) o)
+                .orElseThrow(() -> new WebApplicationException("Life task not found: " + workItemId, 404));
+        final LifeTaskContext ctx = (LifeTaskContext) LifeTaskContext.findByIdOptional(workItemId)
+                .orElseThrow(() -> new WebApplicationException("LifeTaskContext not found: " + workItemId, 404));
+        final LifeCommitmentRecord commitment = LifeCommitmentRecord
+                .findByWorkItemId(workItemId).orElse(null);
+        final CommitmentMode mode = commitment != null ? commitment.mode : null;
+        final CommitmentStatus status = commitment != null ? commitment.status : null;
+        return new LifeTaskResponse(
+                workItem.id,
+                workItem.callerRef != null ? workItem.callerRef.replace("life:task/", "") : null,
+                ctx.domain,
+                workItem.status.name(),
+                ctx.externalActorId,
+                workItem.createdAt,
+                mode, status
         );
     }
 

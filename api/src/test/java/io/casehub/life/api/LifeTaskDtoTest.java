@@ -36,7 +36,7 @@ class LifeTaskDtoTest {
         var actorId = UUID.randomUUID();
         var now = Instant.now();
         var resp = new LifeTaskResponse(workItemId, "household-task", LifeDomain.HOUSEHOLD,
-                "PENDING", actorId, now);
+                "PENDING", actorId, now, null, null);
 
         assertThat(resp.workItemId()).isEqualTo(workItemId);
         assertThat(resp.domain()).isEqualTo(LifeDomain.HOUSEHOLD);
