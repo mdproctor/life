@@ -22,7 +22,36 @@ of consumer product vs developer showcase is noted and does not foreclose either
 
 ---
 
+## Vertical Slices
+
+| Slice | Capability delivered | Layers | Arch patterns | Status |
+|---|---|---|---|---|
+| S1 | Life-domain tasks created against named WorkItemTemplates with SLA deadlines; household-admin escalated automatically when deadlines breach | L1, L2 | Hexagonal, Strategy | ✅ complete |
+| S2 | Contractor commitments tracked via COMMAND/RESPONSE with Watchdog follow-up; family delegation requires acknowledged RESPONSE; financial-oversight gates defer WorkItem creation — no task exists until household-admin approves | + L3 | + Observer | ✅ complete |
+| S3 | Health, financial, and legal decisions produce tamper-evident Merkle audit records; GDPR Art.17 erasure for contractor personal data | + L4 | 🔲 | 🔲 pending |
+| S4 | Multi-step household workflows (travel, care, home-maintenance) orchestrated via CasePlanModel with adaptive approval gates | + L5 | + Event-Driven | 🔲 pending |
+| S5 | Life-domain tasks routed to the highest-trust agent per household domain based on Bayesian track record of past outcomes | + L6 | + Registry | 🔲 pending |
+| S6 | OpenClaw agent skills (banking, calendar, smart home, messaging) execute household automation with full CaseHub accountability | + L7 | + Factory | 🔲 pending |
+
+**Ordering rationale:**
+- S1 before S2: WorkItem infrastructure (L2) required for commitment targets — qhorus COMMAND needs a task to commit on
+- S2 before S3: Qhorus channels (L3) produce `MessageLedgerEntry` records that enrich ledger audit — commitment decisions are the high-value audit events (soft ordering)
+- S3 before S4: Ledger (L4) provides tamper-evident capture of CasePlanModel decision points — CasePlanModel without audit is untracked (soft ordering)
+- S4 before S5: Workflow outcomes (L5) are the primary source of trust score signals — trust routing needs outcome data to route by (hard ordering)
+- S5 before S6: Trust routing (L6) must be wired before OpenClaw dispatches agents — otherwise agents launch without trust weighting (soft ordering)
+
+**Architectural references:**
+- `../parent/docs/ARCHITECTURE.md` — pattern definitions (Hexagonal, Strategy, Observer, Event-Driven, Registry, Factory)
+- `../parent/docs/PLATFORM.md` — capability ownership; boundary rules
+- `../parent/docs/protocols/universal/` and `../parent/docs/protocols/casehub/` — conventions
+- `docs/specs/life-automation.md` — gap analysis and use case mapping
+- `../parent/docs/repos/casehub-life.md` — what this app owns
+
+---
+
 ## Layer 1 — Domain baseline (no CaseHub foundation)
+
+**Participates in:** S1, S2, S3, S4, S5, S6 *(foundation — all slices build on it)*
 
 > **Redesign note (2026-05-27):** The Layer 1 entities `HouseholdTask`, `LifeGoal`, and
 > `LifeEvent` were removed in Layer 2 — they duplicated foundation primitives (see
@@ -119,6 +148,7 @@ These gaps are what the subsequent layers close, one foundation module at a time
 
 ## Layer 2 — + casehub-work (SLA enforcement)
 
+**Participates in:** S1, S2, S3, S4, S5, S6 *(foundation — all slices build on it)*
 **Status:** Complete  
 **Completed:** 2026-05-27
 **Issue:** casehubio/life#3
@@ -179,6 +209,7 @@ casehub-work WorkItems are created alongside `LifeTaskContext` supplements when 
 
 ## Layer 3 — + casehub-qhorus (commitment lifecycle)
 
+**Participates in:** S2, S3, S4, S5, S6
 **Status:** Complete
 **Completed:** 2026-05-29
 **Issue:** casehubio/life#4
@@ -244,6 +275,7 @@ casehub-qhorus is adopted for formal COMMAND/RESPONSE commitment tracking across
 
 ## Layer 4 — + casehub-ledger (tamper-evident audit)
 
+**Participates in:** S3, S4, S5, S6
 **Status:** Pending
 **Issue:** casehubio/life#5
 **Navigation:** `git log --grep="#5" --oneline` (fill in at layer close)
@@ -258,6 +290,7 @@ major decision has a cryptographically verifiable record — not just a database
 
 ## Layer 5 — + casehub-engine (multi-step workflows)
 
+**Participates in:** S4, S5, S6
 **Status:** Pending
 **Issue:** casehubio/life#6
 **Navigation:** `git log --grep="#6" --oneline` (fill in at layer close)
@@ -273,6 +306,7 @@ The CasePlanModel replaces linear REST calls with adaptive workflow orchestratio
 
 ## Layer 6 — Trust routing
 
+**Participates in:** S5, S6
 **Status:** Pending
 **Issue:** casehubio/life#7
 **Navigation:** `git log --grep="#7" --oneline` (fill in at layer close)
@@ -287,6 +321,7 @@ agents handle which household domains reliably and routes accordingly.
 
 ## Layer 7 — + casehub-openclaw (OpenClaw integration)
 
+**Participates in:** S6
 **Status:** Pending
 **Issue:** casehubio/life#8
 **Navigation:** `git log --grep="#8" --oneline` (fill in at layer close)
