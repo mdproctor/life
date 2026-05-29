@@ -228,6 +228,8 @@ Read these **before designing**, not after. The concern column tells you when ea
 | Writing a `@QuarkusTest` | `../garden/docs/protocols/universal/quarkus-test-database.md` — H2 MODE=PostgreSQL, datasource config |
 | Testing SPI wiring | `spi-testing-alternative-inner-classes` protocol |
 | Testing a WorkItem SLA | WorkItem test patterns in `casehub-work.md` |
+| Seeding WorkItemTemplates in tests | Flyway is disabled in tests (`migrate-at-start=false`). Seed templates in `@BeforeEach @Transactional` with an idempotency guard (`if (WorkItemTemplate.find("name", name).count() == 0)`). Use deterministic fixed UUIDs (`00000000-0000-0000-0000-0000000003XX`). See `LifeCommitmentResourceTest.seedIfAbsent()` and `LifeWatchdogAlertObserverTest.seedTemplates()`. |
+| Testing async CDI observers | Call the observer method directly through the injected CDI proxy — bypasses event dispatch and debounce. Method-level `@Transactional(REQUIRES_NEW)` is honoured via CDI proxy. Do NOT use `@TestTransaction` on the test method — it blocks the REQUIRES_NEW from seeing committed setup records. See GE-20260529-9f3557 and `LifeWatchdogAlertObserverTest`. |
 
 ---
 
@@ -370,7 +372,7 @@ Layer 7: + casehub-openclaw — OpenClaw as WorkerProvisioner; pre-built skill e
 - **PP-20260524-10efef** — Flyway ledger locations: add `classpath:db/ledger/migration` when casehub-ledger is active
 - **PP-20260525-607b33** — Flyway repo-scoped path: life domain migrations at `db/life/migration/`
 - **PP-20260527-da1f66** — domain supplement pattern: attach domain context to foundation primitives via supplement table, not wrapper entity
-- **PP-20260526-d0b921** — REST resources must be `@Blocking @ApplicationScoped`
+- **PP-20260526-d0b921** — REST resources must be `@Blocking @ApplicationScoped`; class-level `@Produces(APPLICATION_JSON)` and `@Consumes(APPLICATION_JSON)` required; creation endpoints return 201 Created (no Location header for resources without independent URIs)
 - **PP-20260526-75d9c9** — `@Transactional` on service methods only, never resource methods
 - **dual-trail-audit-pattern.md** — operational trail (casehub-work/qhorus) vs compliance ledger (casehub-ledger)
 - **auth-retrofit-readiness.md** — auth not yet wired to internal services; design for retrofit
