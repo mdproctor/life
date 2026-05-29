@@ -253,7 +253,7 @@ Browser MCP is appropriate when no native skill exists for a target service and 
 casehub-life follows the same developer showcase pattern as devtown and clinical:
 - A module that demonstrates the platform with real-world use cases
 - Tutorial layers structured to guide adoption incrementally
-- Each tutorial layer corresponds to a foundation module adoption level (Level 0 through Level 4, with CaseMemoryStore as an orthogonal addition)
+- Each tutorial layer adds one foundation module, starting from Naive Java with no accountability and building through Layers 1–7
 - The comparison baseline throughout is OpenClaw alone — each tutorial step shows what CaseHub adds
 
 ### Consumer Product Direction
@@ -268,12 +268,13 @@ This remains an open question from the design process. The developer showcase is
 
 | Tutorial Layer | Foundation Adopted | What the Tutorial Demonstrates |
 |----------------|-------------------|-------------------------------|
-| Layer 0 | OpenClaw only | Autonomous household task execution with no accountability |
-| Layer 1 | + casehub-engine | Adding WorkItems and Watchdogs to OpenClaw workflows |
-| Layer 2 | + casehub-qhorus | Channels, oversight gates, family task delegation |
-| Layer 3 | + casehub-work | CasePlanModel for multi-step household workflows |
-| Layer 4 | + casehub-ledger | Tamper-evident records for health, legal, financial governance |
-| Layer 4+ | + CaseMemoryStore | Persistent household knowledge across cases |
+| Layer 1 | Naive Java (no foundation) | ExternalActor entity, REST API — what accountability gaps look like without the platform |
+| Layer 2 | + casehub-work | SLA enforcement: WorkItem + LifeTaskContext supplement, deadline escalation |
+| Layer 3 | + casehub-qhorus | Commitment lifecycle: family delegation, contractor follow-up, oversight gates |
+| Layer 4 | + casehub-ledger | Tamper-evident audit for health, financial, and legal decisions; GDPR Art.17 erasure |
+| Layer 5 | + casehub-engine | Multi-step CasePlanModel workflows: travel, care coordination, home maintenance |
+| Layer 6 | Trust routing | Trust-weighted agent routing from WorkItem outcomes and commitment attestations |
+| Layer 7 | + casehub-openclaw | OpenClaw as WorkerProvisioner; full execution + accountability stack |
 
 ---
 
