@@ -58,9 +58,13 @@ public class LifeWatchdogAlertObserver {
 
     private void createEscalationTask(final LifeCommitmentRecord record) {
         final String title = switch (record.mode) {
-            case DELEGATION -> record.delegateTo.contains(":")
-                    ? "Oversight gate expired — request not approved"
-                    : record.delegateTo + " has not confirmed — action required";
+            case DELEGATION -> {
+                final String delegate = record.delegateTo;
+                yield delegate != null && delegate.contains(":")
+                        ? "Oversight gate expired — request not approved"
+                        : (delegate != null ? delegate : "Unknown")
+                                + " has not confirmed — action required";
+            }
             case CONTRACTOR -> "Contractor has not confirmed by deadline";
             case OVERSIGHT  -> "Oversight gate expired — request not approved";
         };
