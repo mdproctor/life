@@ -1,7 +1,5 @@
 package io.casehub.life.app;
 
-import io.casehub.work.runtime.model.WorkItemPriority;
-import io.casehub.work.runtime.model.WorkItemTemplate;
 import io.casehub.work.runtime.service.ExpiryLifecycleService;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -11,7 +9,6 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
@@ -25,29 +22,7 @@ class LifeTaskResourceTest {
     @BeforeEach
     @Transactional
     void seedTemplates() {
-        if (WorkItemTemplate.find("name", "household-task").count() == 0) {
-            seedTemplate("00000000-0000-0000-0000-000000000001", "household-task", "household", 24);
-        }
-        if (WorkItemTemplate.find("name", "health-appointment").count() == 0) {
-            seedTemplate("00000000-0000-0000-0000-000000000002", "health-appointment", "health", 48);
-        }
-        if (WorkItemTemplate.find("name", "contractor-coordination").count() == 0) {
-            seedTemplate("00000000-0000-0000-0000-000000000003", "contractor-coordination", "contractor", 72);
-        }
-    }
-
-    @Transactional
-    void seedTemplate(String id, String name, String category, int expiryHours) {
-        WorkItemTemplate t = new WorkItemTemplate();
-        t.id = UUID.fromString(id);
-        t.name = name;
-        t.category = category;
-        t.priority = WorkItemPriority.MEDIUM;
-        t.candidateGroups = "household-member";
-        t.defaultExpiryHours = expiryHours;
-        t.createdBy = "life-system";
-        t.createdAt = Instant.now();
-        t.persist();
+        LifeTestFixtures.seedStandardTemplates();
     }
 
     @Test

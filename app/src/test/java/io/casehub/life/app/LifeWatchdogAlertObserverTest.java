@@ -8,8 +8,6 @@ import io.casehub.qhorus.api.watchdog.ApprovalPendingContext;
 import io.casehub.qhorus.api.watchdog.ChannelIdleContext;
 import io.casehub.qhorus.api.watchdog.WatchdogAlertEvent;
 import io.casehub.work.runtime.model.WorkItem;
-import io.casehub.work.runtime.model.WorkItemPriority;
-import io.casehub.work.runtime.model.WorkItemTemplate;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -44,27 +42,10 @@ class LifeWatchdogAlertObserverTest {
     @Inject
     LifeWatchdogAlertObserver observer;
 
-    /**
-     * Flyway is disabled in tests (quarkus.flyway.migrate-at-start=false).
-     * WorkItemTemplates are seeded programmatically, following the established
-     * pattern in LifeCommitmentResourceTest.
-     */
     @BeforeEach
     @Transactional
     void seedTemplates() {
-        if (WorkItemTemplate.find("name", "life-escalation").count() == 0) {
-            final WorkItemTemplate t = new WorkItemTemplate();
-            t.id = UUID.fromString("00000000-0000-0000-0000-000000000301");
-            t.name = "life-escalation";
-            t.description = "Commitment deadline passed — manual action required by household-admin";
-            t.category = "household";
-            t.priority = WorkItemPriority.HIGH;
-            t.candidateGroups = "household-admin";
-            t.defaultExpiryHours = 24;
-            t.createdBy = "life-system";
-            t.createdAt = Instant.now();
-            t.persist();
-        }
+        LifeTestFixtures.seedEscalationTemplate();
     }
 
     // --- Happy path: all three commitment modes ---

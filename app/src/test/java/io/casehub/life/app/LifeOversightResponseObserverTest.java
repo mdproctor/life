@@ -8,8 +8,6 @@ import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.runtime.message.MessageService;
-import io.casehub.work.runtime.model.WorkItemPriority;
-import io.casehub.work.runtime.model.WorkItemTemplate;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -39,18 +37,7 @@ class LifeOversightResponseObserverTest {
     @BeforeEach
     @Transactional
     void seedTemplates() {
-        if (WorkItemTemplate.find("name", "household-task").count() == 0) {
-            final WorkItemTemplate t = new WorkItemTemplate();
-            t.id = UUID.fromString("00000000-0000-0000-0000-000000000201");
-            t.name = "household-task";
-            t.category = "household";
-            t.priority = WorkItemPriority.MEDIUM;
-            t.candidateGroups = "household-member";
-            t.defaultExpiryHours = 24;
-            t.createdBy = "life-system";
-            t.createdAt = Instant.now();
-            t.persist();
-        }
+        LifeTestFixtures.seedStandardTemplates();
     }
 
     @Test

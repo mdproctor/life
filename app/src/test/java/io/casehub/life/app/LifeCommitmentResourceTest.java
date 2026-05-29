@@ -1,9 +1,6 @@
 package io.casehub.life.app;
 
-import io.casehub.work.runtime.model.WorkItemPriority;
-import io.casehub.work.runtime.model.WorkItemTemplate;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,31 +18,8 @@ class LifeCommitmentResourceTest {
     @BeforeEach
     @Transactional
     void seedTemplates() {
-        seedIfAbsent("00000000-0000-0000-0000-000000000101", "household-task", "household", 24);
-        seedIfAbsent("00000000-0000-0000-0000-000000000102", "contractor-coordination", "contractor", 72);
-        seedIfAbsent("00000000-0000-0000-0000-000000000103", "life-escalation", "household", 24, "household-admin");
-    }
-
-    @Transactional
-    void seedIfAbsent(final String id, final String name, final String category, final int expiryHours) {
-        seedIfAbsent(id, name, category, expiryHours, "household-member");
-    }
-
-    @Transactional
-    void seedIfAbsent(final String id, final String name, final String category,
-                      final int expiryHours, final String candidateGroups) {
-        if (WorkItemTemplate.find("name", name).count() == 0) {
-            final WorkItemTemplate t = new WorkItemTemplate();
-            t.id = UUID.fromString(id);
-            t.name = name;
-            t.category = category;
-            t.priority = WorkItemPriority.MEDIUM;
-            t.candidateGroups = candidateGroups;
-            t.defaultExpiryHours = expiryHours;
-            t.createdBy = "life-system";
-            t.createdAt = Instant.now();
-            t.persist();
-        }
+        LifeTestFixtures.seedStandardTemplates();
+        LifeTestFixtures.seedEscalationTemplate();
     }
 
     // --- POST /life-tasks/{id}/commit ---

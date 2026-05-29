@@ -1,7 +1,5 @@
 package io.casehub.life.app;
 
-import io.casehub.work.runtime.model.WorkItemPriority;
-import io.casehub.work.runtime.model.WorkItemTemplate;
 import io.casehub.work.runtime.service.ExpiryLifecycleService;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -14,7 +12,6 @@ import org.junit.jupiter.api.TestMethodOrder;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
@@ -38,25 +35,7 @@ class ShowcaseScenarioTest {
     @BeforeEach
     @Transactional
     void seedTemplates() {
-        seedIfAbsent("00000000-0000-0000-0000-000000000011", "household-task", "household", 24);
-        seedIfAbsent("00000000-0000-0000-0000-000000000012", "health-appointment", "health", 48);
-        seedIfAbsent("00000000-0000-0000-0000-000000000013", "contractor-coordination", "contractor", 72);
-    }
-
-    @Transactional
-    void seedIfAbsent(String id, String name, String category, int expiryHours) {
-        if (WorkItemTemplate.find("name", name).count() == 0) {
-            WorkItemTemplate t = new WorkItemTemplate();
-            t.id = UUID.fromString(id);
-            t.name = name;
-            t.category = category;
-            t.priority = WorkItemPriority.MEDIUM;
-            t.candidateGroups = "household-member";
-            t.defaultExpiryHours = expiryHours;
-            t.createdBy = "life-system";
-            t.createdAt = Instant.now();
-            t.persist();
-        }
+        LifeTestFixtures.seedStandardTemplates();
     }
 
     @Test

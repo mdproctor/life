@@ -3,8 +3,6 @@ package io.casehub.life.app;
 import io.casehub.life.api.commitment.CommitmentStatus;
 import io.casehub.life.app.entity.LifeCommitmentRecord;
 import io.casehub.qhorus.runtime.watchdog.WatchdogEvaluationService;
-import io.casehub.work.runtime.model.WorkItemPriority;
-import io.casehub.work.runtime.model.WorkItemTemplate;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -44,32 +42,13 @@ class CommitmentLifecycleScenarioTest {
     @BeforeEach
     @Transactional
     void seedTemplates() {
-        seedIfAbsent("00000000-0000-0000-0000-000000000301", "household-task", "household", 24, "household-member");
-        seedIfAbsent("00000000-0000-0000-0000-000000000302", "contractor-coordination", "contractor", 72, "household-member");
-        seedIfAbsent("00000000-0000-0000-0000-000000000303", "life-escalation", "household", 24, "household-admin");
+        LifeTestFixtures.seedStandardTemplates();
+        LifeTestFixtures.seedEscalationTemplate();
     }
 
-    /** Checks if the commitment for a task has been marked EXPIRED (by Watchdog alert). */
     @Transactional
     boolean commitmentExpiredByWorkItem(final UUID workItemId) {
         return LifeCommitmentRecord.findByWorkItemId(workItemId).isEmpty();
-    }
-
-    @Transactional
-    void seedIfAbsent(final String id, final String name, final String category,
-                      final int expiryHours, final String candidateGroups) {
-        if (WorkItemTemplate.find("name", name).count() == 0) {
-            final WorkItemTemplate t = new WorkItemTemplate();
-            t.id = UUID.fromString(id);
-            t.name = name;
-            t.category = category;
-            t.priority = WorkItemPriority.MEDIUM;
-            t.candidateGroups = candidateGroups;
-            t.defaultExpiryHours = expiryHours;
-            t.createdBy = "life-system";
-            t.createdAt = Instant.now();
-            t.persist();
-        }
     }
 
     @Test
