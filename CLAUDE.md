@@ -128,33 +128,31 @@ type: java
 
 **Read first:** `../parent/docs/AGENTIC-HARNESS-GUIDE.md`
 
-**Primary goal:** Reference architecture and field showcase for developers building personal life automation — demonstrating that household coordination, health management, family obligations, and legal compliance are structurally better served by a formal accountability layer than by best-effort automation tools.
+**Goal:** Production-grade personal life automation harness demonstrating that household coordination, health management, family obligations, and legal compliance are structurally better served by a formal accountability layer than by best-effort automation tools.
 
-**Secondary goal:** Tutorial material produced as a by-product of building correctly. `LAYER-LOG.md` (at project root) is the primary new artifact. A layer is not complete until its entry is written. See the AML reference implementation and `docs/protocols/universal/layer-log.md` in casehub-parent for the format.
+**Architecture record:** `LAYER-LOG.md` tracks integration layer entries. A layer is not complete until its entry is written. Arc42Stories migration planned — layer entries will move to `ARC42STORIES.MD §9.4` when the document is bootstrapped. See `../parent/docs/arc42stories-spec.md` and `../parent/docs/arc42stories-casehub-profile.md`.
 
 ---
 
 ## What This Project Is
 
-`casehub-life` is a **personal life automation harness** built on the CaseHub platform foundation. It coordinates household management agents, health coordination agents, financial governance agents, elder/family care agents — producing a formally tracked, SLA-enforced, optionally tamper-evident record of life obligations and decisions. Field showcase and tutorial for developers evaluating CaseHub for personal automation.
+`casehub-life` is a **personal life automation harness** built on the CaseHub platform foundation. It coordinates household management agents, health coordination agents, financial governance agents, elder/family care agents — producing a formally tracked, SLA-enforced, tamper-evident record of life obligations and decisions.
 
 This is an **application layer**, not a framework. The foundation (casehub-engine, casehub-qhorus, casehub-ledger, casehub-work, casehub-connectors) provides coordination, accountability, audit, and compliance primitives. casehub-life provides the personal life domain logic: what a household task is, how a care coordination cycle proceeds, which family members have decision authority, and how a major financial decision requires human sign-off before action.
 
 ### Why Personal Life Automation
 
-Personal life has domains where CaseHub's accountability properties matter more than in many enterprise workflows: contractor commitments routinely go unfulfilled (no Watchdog), health follow-ups get forgotten (no SLA), family obligations evaporate (no commitment tracking), legal deadlines creep up (no escalation).
+Personal life has domains where CaseHub's accountability properties are structurally required: contractor commitments routinely go unfulfilled without a Watchdog, health follow-ups are forgotten without SLA enforcement, family obligations evaporate without commitment tracking, legal deadlines arrive without escalation.
 
-The comparison baseline: **OpenClaw alone** — excellent execution, no accountability.
+### Accountability Properties Delivered
 
-### Compliance/Accountability Gaps Closed vs OpenClaw Alone
-
-| Domain | OpenClaw alone | casehub-life |
+| Domain | Without CaseHub | With casehub-life |
 |---|---|---|
-| Contractor follow-up | Agent says it will chase — silent if it doesn't | Commitment + Watchdog; automated SMS via messaging skill if no ETA |
+| Contractor follow-up | Silent if commitment not met | Commitment + Watchdog; automated SMS via messaging skill if no ETA |
 | Health appointment | Reminder sent, then forgotten | WorkItem with SLA deadline; escalation to named GP |
-| Monthly grocery SLA | Heartbeat triggers, may fail silently | WorkItem with deadline and escalation |
-| Major financial decision | Best-effort research, no approval gate | Oversight channel; human RESPONSE required before any action |
-| Legal deadline | Calendar reminder | WorkItem with hard deadline + ledger record of action taken |
+| Monthly grocery SLA | May fail silently | WorkItem with deadline and escalation |
+| Major financial decision | No approval gate | Oversight channel; human RESPONSE required before any action |
+| Legal deadline | Calendar reminder only | WorkItem with hard deadline + tamper-evident ledger record |
 
 ---
 
@@ -191,14 +189,12 @@ Read these **before designing**, not after. The concern column tells you when ea
 | Naming capability tags or trust dimensions | This CLAUDE.md §What This Project Owns — existing tag and dimension names |
 | Choosing which life domain a feature belongs to | `LifeDomain` enum values in `api/` — routing logic ties capability tags to domains |
 
-### Tutorial layer design
+### Layer design
 
 | Concern | Read first |
 |---------|-----------|
-| Deciding which layer a feature belongs in | Tutorial Layers section below — what each layer must NOT include |
-| Writing gap comments in naive/pre-CaseHub code | The accountability gap table in this CLAUDE.md — five gap types |
+| Deciding which layer a feature belongs in | Foundation Layers section below — layer ownership boundaries |
 | Documenting a completed layer | LAYER-LOG.md — write the entry before closing the issue |
-| Understanding the teaching objective of a layer | Tutorial Layers section below — each layer's specific contrast setup |
 
 ### Foundation integration
 
@@ -313,15 +309,15 @@ app/    — Quarkus: JPA entities (ExternalActor, LifeTaskContext, LifeCommitmen
 
 ---
 
-## Tutorial Layers (1–7)
+## Foundation Layers
 
-Each layer corresponds to a foundation module adoption step. LAYER-LOG.md tracks completion — a layer is not done until the entry is written.
+Each layer corresponds to a foundation module integration step. LAYER-LOG.md tracks completion — a layer is not done until its entry is written. Layers map to arc42stories §9.4 Layer Entries.
 
 ```
-Layer 1: Naive Java — ExternalActor domain entity, REST API, no accountability, no audit.
-         Gap comments show what breaks when a contractor misses a deadline or a health
-         follow-up is silently dropped. Note: HouseholdTask/LifeGoal/LifeEvent entities
-         introduced here were removed in Layer 2 (duplicated foundation primitives — parent#79).
+Layer 1: Domain baseline — ExternalActor entity, REST API, life domain vocabulary (LifeDomain,
+         LifeCapabilities, LifeTrustDimensions). No foundation modules active.
+         Note: HouseholdTask/LifeGoal/LifeEvent entities introduced here were removed in
+         Layer 2 (duplicated foundation primitives — parent#79).
          ✅ COMPLETE
 
 Layer 2: + casehub-work — SLA enforcement via WorkItemTemplate + LifeTaskContext supplement.
@@ -335,20 +331,18 @@ Layer 3: + casehub-qhorus — commitment lifecycle: family delegation (COMMAND t
          (COMMAND to household-admin; no action until RESPONSE received).
          ✅ COMPLETE
 
-Layer 4: + casehub-ledger — tamper-evident audit: health decisions, financial decisions,
-         legal actions. GDPR Art.17 for personal data held about contractors and dependents.
+Layer 4: + casehub-ledger — tamper-evident Merkle audit for health decisions, financial
+         decisions, and legal actions. GDPR Art.17 erasure for contractor personal data.
 
 Layer 5: + casehub-engine — multi-step CasePlanModel workflows: travel-plan, care-coordination,
-         home-maintenance-cycle. Adaptive paths — e.g. major purchase above threshold triggers
-         approval gate binding that doesn't fire for small purchases.
+         home-maintenance-cycle. Adaptive paths — major purchase above threshold triggers
+         approval gate binding.
 
-Layer 6: Trust routing — trust-weighted agent routing: which agent is most reliable for health
-         vs finance vs scheduling. Bayesian Beta updated from WorkItem outcomes and commitment
-         attestations.
+Layer 6: Trust routing — trust-weighted agent routing by household domain, backed by Bayesian
+         Beta updated from WorkItem outcomes and commitment attestations.
 
-Layer 7: + casehub-openclaw — OpenClaw as WorkerProvisioner; pre-built skill ecosystem
-         (banking APIs, calendar integration, Home Assistant, messaging). Comparison vs
-         OpenClaw alone: accountability gaps closed by the casehub-life layer.
+Layer 7: + casehub-openclaw — OpenClaw as WorkerProvisioner; skill ecosystem (banking APIs,
+         calendar integration, Home Assistant, messaging).
 ```
 
 ### Foundation Gates
@@ -438,12 +432,6 @@ JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn compile -pl api,app --batch-mode
 ```
 
 **Important:** `mvn test -pl app` requires `api` to be installed in the local Maven repo first. Run `mvn install -pl api` if you get ClassNotFound errors for `io.casehub.life.api.*`.
-
----
-
-## Strategic Positioning Note
-
-casehub-life is currently scaffolded as a **developer showcase** (tutorial layers by foundation module adoption, like devtown/clinical/aml). The open question of developer showcase vs consumer product (research spec §5.8) is unresolved — the tutorial layer structure does not foreclose the consumer product direction. Do not optimise prematurely for either: keep domain model decisions reversible and the layer boundary clean.
 
 ---
 

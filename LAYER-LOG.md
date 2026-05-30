@@ -1,13 +1,16 @@
 # casehub-life Agentic Harness — Layer Log
 
-Structured record of what was built at each integration layer, optimised for LLM consumption.
-Each entry is the raw material needed to reproduce the layer in a different domain harness.
-Entries are ordered for learning, not chronology. Each entry is complete when the layer closes.
+Architecture record of what was built at each integration layer. Entries are ordered for
+reading comprehension (learning progression), not chronology. Each entry is complete when
+the layer closes.
+
+**Migration note:** This file will migrate to `ARC42STORIES.MD §9.4` Layer Entries when
+that document is bootstrapped. Format: `../parent/docs/arc42stories-spec.md` and
+`../parent/docs/arc42stories-casehub-profile.md`.
 
 Cross-references:
 - Platform compliance gap analysis: `docs/specs/life-automation.md`
 - Actor model: `docs/specs/life-actor-model.md`
-- Tutorial teaching objectives: `../parent/docs/tutorial-strategy.md`
 - AML reference implementation: `../aml/LAYER-LOG.md`
 - Clinical reference implementation: `../clinical/LAYER-LOG.md`
 - Research spec: `../parent/docs/specs/2026-05-25-openclaw-casehub-integration.md`
@@ -15,10 +18,6 @@ Cross-references:
 **Architectural note — hexagonal pattern:** casehub-life uses the AML api/app split:
 - `api/` — pure Java, zero framework imports, zero JPA. Domain records and constants.
 - `app/` — Quarkus application: Panache entities, REST resources, Flyway, foundation wiring.
-
-**Strategic positioning note:** casehub-life is a developer showcase in the devtown/clinical
-tradition — integration layers by foundation module adoption sequence. The open question (spec §5.8)
-of consumer product vs developer showcase is noted and does not foreclose either direction.
 
 ---
 
@@ -66,16 +65,14 @@ of consumer product vs developer showcase is noted and does not foreclose either
 → 9fa2146 docs(#2): Layer 1 domain baseline spec
 → 38f3efb docs(#2): update LAYER-LOG.md — domain baseline terminology, accountability gaps table, navigation lines
 
-### What it shows
+### What it adds
 
-Household domain model with no CaseHub foundation modules. Core entities in `app/`
-(Quarkus Panache) and domain constants in `api/` (pure Java). A REST API that persists
-household tasks, goals, events, and external actors directly — no accountability, SLA, or
-obligation tracking.
+Household domain vocabulary with no CaseHub foundation modules. Core entities in `app/`
+(Quarkus Panache) and domain constants in `api/` (pure Java). A REST API for external actors
+and life-domain tasks — without SLA enforcement, commitment tracking, or audit.
 
-This is the starting point every subsequent layer improves. The gaps are structural: REST calls
-go directly to the database. No record of who committed to what. No SLA governs how long a task
-sits. No formal obligation exists when a contractor says they will come on Thursday.
+The accountability gaps are structural: no record of who committed to what, no SLA enforcement,
+no formal obligation when a contractor commits to a date, no escalation when deadlines pass.
 
 ### Accountability gaps this layer leaves open
 
@@ -118,7 +115,7 @@ These gaps are what the subsequent layers close, one foundation module at a time
 - `app/src/main/resources/db/migration/V103__create_life_event.sql`
 
 **Tests (51 total):**
-- `app/src/test/java/io/casehub/life/app/ShowcaseScenarioTest.java` — household week @QuarkusTest narrative (6 ordered methods, state carries between methods)
+- `app/src/test/java/io/casehub/life/app/ShowcaseScenarioTest.java` — @QuarkusTest integration scenario (6 ordered methods, shared state; candidate for rename/refactor)
 - `app/src/test/java/io/casehub/life/app/*ResourceTest.java` — REST CRUD + filter + 404/409 coverage
 - `api/src/test/java/io/casehub/life/api/*Test.java` — pure-Java enum/constant validation
 
@@ -141,8 +138,7 @@ These gaps are what the subsequent layers close, one foundation module at a time
 4. Flyway migrations in `app/src/main/resources/db/migration/` at V100+ (casehub-work owns V1–V21+; ledger owns V1000–V1007). Migrations run in production; tests use `database.generation=drop-and-create`.
 5. REST resources must be `@Blocking @ApplicationScoped` — quarkus-rest (RESTEasy Reactive) runs on the I/O thread; JDBC Panache blocks without `@Blocking`. `@Transactional` belongs on service methods only, not on resource methods.
 6. Test `application.properties`: two H2 datasources (default + qhorus), both with `drop-and-create`. Suppress reactive with `quarkus.datasource.reactive=false` for both. Exclude CDI conflicts (JpaWorkloadProvider, connector beans). Index engine jars explicitly.
-7. Write a `@QuarkusTest @TestMethodOrder` ShowcaseScenarioTest that narrates a full domain week showing the accountability gaps in sequence. Gap commentary goes in LAYER-LOG.md, not in test code.
-8. Unit-test stateless domain logic (enum values, constant uniqueness) in pure Java without Quarkus.
+7. Unit-test stateless domain logic (enum values, constant uniqueness) in pure Java without Quarkus.
 
 ---
 
@@ -280,11 +276,11 @@ casehub-qhorus is adopted for formal COMMAND/RESPONSE commitment tracking across
 **Issue:** casehubio/life#5
 **Navigation:** `git log --grep="#5" --oneline` (fill in at layer close)
 
-### What it shows
+### What it adds
 
-Integrates `casehub-ledger` for tamper-evident Merkle audit of health decisions, financial
-decisions, and legal actions. GDPR Art.17 erasure for personal data stored in the ledger. Every
-major decision has a cryptographically verifiable record — not just a database entry.
+Tamper-evident Merkle audit for health decisions, financial decisions, and legal actions via
+`casehub-ledger`. GDPR Art.17 erasure for contractor personal data. Every major life decision
+has a cryptographically verifiable record independent of the operational database.
 
 ---
 
@@ -295,12 +291,12 @@ major decision has a cryptographically verifiable record — not just a database
 **Issue:** casehubio/life#6
 **Navigation:** `git log --grep="#6" --oneline` (fill in at layer close)
 
-### What it shows
+### What it adds
 
-Integrates `casehub-engine` for complex multi-step CasePlanModel workflows. Travel planning
-(destination research → budget gate → flight search → human approval → booking → reminders).
-Care coordination (assessment → care plan → site assignments → SLA monitoring).
-The CasePlanModel replaces linear REST calls with adaptive workflow orchestration.
+Multi-step CasePlanModel workflows via `casehub-engine`. Travel planning (destination research
+→ budget gate → booking → reminders). Care coordination (assessment → care plan → SLA
+monitoring). Adaptive paths: major purchase above threshold triggers an approval gate binding
+that doesn't fire for routine purchases.
 
 ---
 
@@ -311,11 +307,12 @@ The CasePlanModel replaces linear REST calls with adaptive workflow orchestratio
 **Issue:** casehubio/life#7
 **Navigation:** `git log --grep="#7" --oneline` (fill in at layer close)
 
-### What it shows
+### What it adds
 
-Trust-weighted agent routing. Which health-agent has the highest deadline-reliability score?
-Which finance-agent has the best cost-accuracy record? Over time, the platform learns which
-agents handle which household domains reliably and routes accordingly.
+Trust-weighted agent routing by household domain. `ActorTrustScore` updated from WorkItem
+outcomes and commitment attestations (Bayesian Beta). Routing selects the agent with the
+highest domain-specific trust score — deadline-reliability for contractor tasks, cost-accuracy
+for finance, factual-accuracy for health.
 
 ---
 
@@ -326,16 +323,10 @@ agents handle which household domains reliably and routes accordingly.
 **Issue:** casehubio/life#8
 **Navigation:** `git log --grep="#8" --oneline` (fill in at layer close)
 
-### What it shows
+### What it adds
 
-Integrates casehub-openclaw as the WorkerProvisioner. OpenClaw instances execute household
-skills: banking API aggregation (Open Banking skills), Google Calendar integration (calendar
-skill), Home Assistant smart home control (IoT skill), WhatsApp/SMS follow-up (messaging skills).
-
-The ChannelContextWindow ensures each OpenClaw agent wakes with fresh context from Qhorus
-channels — grocery-agent sees finance-agent's budget warning before placing an order;
-health-agent sees smart home movement data before sending a medication reminder.
-
-This layer demonstrates the bidirectional integration: CaseHub orchestrates via direct call
-to /hooks/agent; OpenClaw heartbeat monitors ambient conditions and creates CaseHub WorkItems
-when conditions warrant. Neither replaces the other.
+casehub-openclaw as the WorkerProvisioner. OpenClaw instances execute household skills:
+banking API aggregation, Google Calendar integration, Home Assistant smart home control,
+WhatsApp/SMS follow-up. The ChannelContextWindow delivers fresh Qhorus channel context to
+each agent before execution. Bidirectional: CaseHub orchestrates via `/hooks/agent`; OpenClaw
+heartbeat creates WorkItems when ambient conditions warrant action.
