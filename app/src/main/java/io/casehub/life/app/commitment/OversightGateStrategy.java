@@ -5,8 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.casehub.life.api.commitment.CommitmentMode;
 import io.casehub.life.api.commitment.CommitmentOutcome;
 import io.casehub.life.api.commitment.CommitmentStatus;
+import io.casehub.life.app.LifeDecisionEventType;
 import io.casehub.life.app.entity.LifeCommitmentRecord;
 import io.casehub.life.app.infrastructure.LifeChannelInitializer;
+import io.casehub.life.app.service.ledger.LifeLedgerWriter;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
@@ -29,6 +31,9 @@ public class OversightGateStrategy implements LifeCommitmentStrategy {
 
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    LifeLedgerWriter lifeLedgerWriter;
 
     @Override
     public boolean applies(final CommitmentContext context) {
@@ -80,9 +85,13 @@ public class OversightGateStrategy implements LifeCommitmentStrategy {
         record.channelId = LifeChannelInitializer.OVERSIGHT_CHANNEL;
         record.deadline = oc.request().deadline();
         record.delegateTo = taskKey;       // repurposed as dedup key for oversight gates
+        record.amountThreshold = oc.request().amountThreshold();
+        record.purchaseCategory = oc.request().purchaseCategory();
         record.pendingTaskJson = pendingTaskJson;
         record.createdAt = record.updatedAt = Instant.now();
         record.persist();
+
+        lifeLedgerWriter.writeFinancialEntry(LifeDecisionEventType.CREATED, record, null);
 
         return new CommitmentOutcome(record.id, correlationId,
                 CommitmentMode.OVERSIGHT, CommitmentStatus.PENDING_RESPONSE);

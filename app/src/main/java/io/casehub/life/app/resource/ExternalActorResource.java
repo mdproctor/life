@@ -72,6 +72,13 @@ public class ExternalActorResource {
         return Response.noContent().build();
     }
 
+    @DELETE
+    @Path("/{id}/personal-data")
+    public Response erasePersonalData(@PathParam("id") final UUID id) {
+        service.erase(id);
+        return Response.noContent().build();
+    }
+
     @GET
     @Path("/{id}/tasks")
     public Response listTasks(@PathParam("id") final UUID id) {

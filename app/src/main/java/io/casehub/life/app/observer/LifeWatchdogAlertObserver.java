@@ -1,9 +1,12 @@
 package io.casehub.life.app.observer;
 
+import io.casehub.life.api.commitment.CommitmentMode;
 import io.casehub.life.api.commitment.CommitmentStatus;
 import io.casehub.life.api.request.CreateLifeTaskRequest;
+import io.casehub.life.app.LifeDecisionEventType;
 import io.casehub.life.app.entity.LifeCommitmentRecord;
 import io.casehub.life.app.service.LifeTaskService;
+import io.casehub.life.app.service.ledger.LifeLedgerWriter;
 import io.casehub.qhorus.api.watchdog.WatchdogAlertEvent;
 import io.casehub.qhorus.api.watchdog.WatchdogConditionType;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -41,6 +44,9 @@ public class LifeWatchdogAlertObserver {
     @Inject
     ObjectMapper objectMapper;
 
+    @Inject
+    LifeLedgerWriter lifeLedgerWriter;
+
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void onAlert(@ObservesAsync final WatchdogAlertEvent event) {
         if (event.conditionType() != WatchdogConditionType.APPROVAL_PENDING) return;
@@ -49,6 +55,9 @@ public class LifeWatchdogAlertObserver {
                 .findExpiredPendingByChannel(event.notificationChannel(), Instant.now());
 
         for (final LifeCommitmentRecord record : expired) {
+            if (record.mode == CommitmentMode.OVERSIGHT) {
+                lifeLedgerWriter.writeFinancialEntry(LifeDecisionEventType.SLA_BREACH, record, null);
+            }
             createEscalationTask(record);
             record.status = CommitmentStatus.EXPIRED;
             record.updatedAt = Instant.now();

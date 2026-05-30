@@ -156,7 +156,9 @@ class CommitmentLifecycleScenarioTest {
                 .body("""
                         {
                           "deadline":"%s",
-                          "pendingTask":{"templateRef":"household-task","title":"Buy electric car"}
+                          "pendingTask":{"templateRef":"household-task","title":"Buy electric car"},
+                          "amountThreshold":35000.00,
+                          "purchaseCategory":"vehicle"
                         }
                         """.formatted(Instant.now().plus(48, ChronoUnit.HOURS)))
                 .when().post("/life-oversight-gates")

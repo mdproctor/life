@@ -7,7 +7,9 @@ import io.casehub.life.api.request.CreateLifeTaskRequest;
 import io.casehub.life.api.response.LifeTaskResponse;
 import io.casehub.life.app.entity.ExternalActor;
 import io.casehub.life.app.entity.LifeCommitmentRecord;
+import io.casehub.life.app.LifeDecisionEventType;
 import io.casehub.life.app.entity.LifeTaskContext;
+import io.casehub.life.app.service.ledger.LifeLedgerWriter;
 import io.casehub.work.runtime.model.WorkItem;
 import io.casehub.work.runtime.model.WorkItemCreateRequest;
 import io.casehub.work.runtime.model.WorkItemTemplate;
@@ -29,6 +31,9 @@ public class LifeTaskService {
 
     @Inject
     WorkItemTemplateService workItemTemplateService;
+
+    @Inject
+    LifeLedgerWriter lifeLedgerWriter;
 
     @Transactional
     public LifeTaskResponse create(final CreateLifeTaskRequest req) {
@@ -86,6 +91,12 @@ public class LifeTaskService {
         ctx.domain = domain;
         ctx.externalActorId = req.externalActorId();
         ctx.persist();
+
+        if (domain == LifeDomain.HEALTH) {
+            lifeLedgerWriter.writeHealthEntry(LifeDecisionEventType.CREATED, ctx, workItem);
+        } else if (domain == LifeDomain.LEGAL) {
+            lifeLedgerWriter.writeLegalEntry(LifeDecisionEventType.CREATED, ctx, workItem);
+        }
 
         return new LifeTaskResponse(
                 workItem.id,

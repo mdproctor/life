@@ -56,6 +56,15 @@ public class LifeCommitmentRecord extends PanacheEntityBase {
     @Column(name = "updated_at", nullable = false)
     public Instant updatedAt;
 
+    @Column(name = "approved_by", length = 255)
+    public String approvedBy;
+
+    @Column(name = "amount_threshold", precision = 15, scale = 2)
+    public java.math.BigDecimal amountThreshold;
+
+    @Column(name = "purchase_category", length = 100)
+    public String purchaseCategory;
+
     public static Optional<LifeCommitmentRecord> findByCorrelationId(final String correlationId) {
         return find("correlationId", correlationId).firstResultOptional();
     }

@@ -226,6 +226,8 @@ Read these **before designing**, not after. The concern column tells you when ea
 | Testing a WorkItem SLA | WorkItem test patterns in `casehub-work.md` |
 | Seeding WorkItemTemplates in tests | Flyway is disabled in tests (`migrate-at-start=false`). Seed templates via `LifeTestFixtures.seedStandardTemplates()` and/or `LifeTestFixtures.seedEscalationTemplate()` from `@BeforeEach @Transactional`. Canonical UUIDs 001–004; idempotency guard by template name. See `app/src/test/java/io/casehub/life/app/LifeTestFixtures.java`. |
 | Testing async CDI observers | Call the observer method directly through the injected CDI proxy — bypasses event dispatch and debounce. Method-level `@Transactional(REQUIRES_NEW)` is honoured via CDI proxy. Do NOT use `@TestTransaction` on the test method — it blocks the REQUIRES_NEW from seeing committed setup records. See GE-20260529-9f3557 and `LifeWatchdogAlertObserverTest`. |
+| Testing ledger writers (unit) | Mock `LedgerEntryRepository` with Mockito. Do NOT assert on `entry.id` or `entry.occurredAt` — these are set by `LedgerEntry.@PrePersist` which is bypassed in mocked tests. See `LifeLedgerWriterTest`. |
+| Multi-PU entity package placement | Ledger subclass entities must NOT be sub-packages of `io.casehub.life.app.entity` (default PU). Use `io.casehub.life.app.ledger` — Quarkus uses prefix matching for PU assignment; sub-packages of a default-PU package get assigned to the default PU, causing cross-PU association errors with `LedgerEntry.supplements`. |
 
 ---
 
@@ -235,7 +237,7 @@ Read these **before designing**, not after. The concern column tells you when ea
 
 **Life domain entities:**
 - `LifeDomain` enum — `HOUSEHOLD`, `HEALTH`, `FINANCE`, `FAMILY_SCHEDULING`, `TRAVEL`, `LEGAL`, `CONTRACTOR_COORDINATION`, `ELDER_CARE`
-- `ExternalActor` — contractor, doctor, service provider, or institution: `{name, actorType, contactMethod, contactValue}` — the one genuine JPA domain entity
+- `ExternalActor` — contractor, doctor, service provider, or institution: `{name, actorType, contactMethod, contactValue, gdprErasedAt}` — the one genuine JPA domain entity
 - `LifeTaskContext` — domain supplement for foundation WorkItems: `{workItemId, domain, externalActorId, recurrence}` — carries life-specific context that has no foundation home
 
 Note: `HouseholdTask`, `LifeGoal`, `LifeEvent` were removed in Layer 2 — they duplicated foundation primitives (WorkItem, CaseInstance, LedgerEntry). See `docs/specs/2026-05-27-layer2-casehub-work-sla.md` and parent#79.
@@ -244,6 +246,14 @@ Note: `HouseholdTask`, `LifeGoal`, `LifeEvent` were removed in Layer 2 — they 
 - `LifeCommitmentRecord` — supplement to qhorus native `Commitment`, keyed by `correlationId`; tracks DELEGATION/CONTRACTOR/OVERSIGHT commitment mode and status. `workItemId` is null for OVERSIGHT until household-admin RESPONSE fulfills the gate.
 - `LifeCommitmentStrategy` — internal app/ SPI (not api/ — context types reference JPA entities); three implementations: `DelegationCommitmentStrategy`, `ContractorCommitmentStrategy`, `OversightGateStrategy`.
 - Channel topology: `life/delegation` (shared, family delegation), `life/oversight` (shared, COMMAND+RESPONSE only), `life/actor/{externalActorId}` (per-actor, contractor commitments). One APPROVAL_PENDING Watchdog per channel.
+
+**Layer 4 additions:**
+- `HealthDecisionLedgerEntry`, `FinancialDecisionLedgerEntry`, `LegalActionLedgerEntry`, `ExternalActorErasureLedgerEntry` — four JOINED-inheritance `LedgerEntry` subclasses in `io.casehub.life.app.ledger` (qhorus PU). Per-domain required fields; `@DiscriminatorValue` discriminates.
+- `LifeDecisionEventType` — enum: `CREATED`, `SLA_BREACH`, `COMPLETED`. Internal to `app/`.
+- `LifeLedgerWriter` — unified writer service; owns `sequenceNumber` computation and base field assembly. `@PrePersist` on `LedgerEntry` handles `id` and `occurredAt`.
+- `LifeDecisionLedgerObserver` — CDI observer for `SlaBreachEvent` (HEALTH/LEGAL/FINANCE SLA_BREACH) and `WorkItemLifecycleEvent` (COMPLETED only). `@Transactional(REQUIRES_NEW)`.
+- GDPR Art.17 erasure: `DELETE /external-actors/{id}/personal-data` — nullifies PII, writes `ExternalActorErasureLedgerEntry`. Guards: 404/409 already-erased/409 active-tasks.
+- actorId convention: `"life-system"` for system events, `"household-admin"` for GDPR erasure (until auth wired).
 
 **Capability tags:**
 - `household-management` — routine household coordination: grocery ordering, maintenance scheduling, contractor liaison
@@ -304,7 +314,9 @@ app/    — Quarkus: JPA entities (ExternalActor, LifeTaskContext, LifeCommitmen
           REST resources, Flyway migrations (db/life/migration/), service layer,
           SPI implementations (LifeSlaBreachPolicy, LifeCommitmentStrategy + 3 impls),
           infrastructure (LifeChannelInitializer), observers (LifeOversightResponseObserver,
-          LifeWatchdogAlertObserver), CasePlanModel YAML definitions.
+          LifeWatchdogAlertObserver, LifeDecisionLedgerObserver), CasePlanModel YAML definitions.
+          Ledger subclasses in io.casehub.life.app.ledger (qhorus PU);
+          ledger join table migrations at db/life/ledger/migration/ (V2100+).
 ```
 
 ---
@@ -333,6 +345,7 @@ Layer 3: + casehub-qhorus — commitment lifecycle: family delegation (COMMAND t
 
 Layer 4: + casehub-ledger — tamper-evident Merkle audit for health decisions, financial
          decisions, and legal actions. GDPR Art.17 erasure for contractor personal data.
+         ✅ COMPLETE
 
 Layer 5: + casehub-engine — multi-step CasePlanModel workflows: travel-plan, care-coordination,
          home-maintenance-cycle. Adaptive paths — major purchase above threshold triggers
@@ -400,10 +413,12 @@ JAVA_HOME=/Library/Java/JavaVirtualMachines/graalvm-25.jdk/Contents/Home  # nati
 
 **Flyway critical rules:**
 - Life domain migrations live at `db/life/migration/` (PP-20260525-607b33) — V100+
+- Life ledger join table migrations at `db/life/ledger/migration/` — V2100+ (qhorus datasource)
 - Production locations: `classpath:db/life/migration,classpath:db/work/migration`
-- casehub-work occupies V1–V31; life starts at V100. V-ranges don't overlap.
+- casehub-work occupies V1–V31; life starts at V100; ledger join tables at V2100+. V-ranges don't overlap.
 - Add `classpath:db/ledger/migration` when casehub-ledger is active (PP-20260524-10efef)
 - Add `classpath:db/qhorus/migration` when casehub-qhorus is active
+- Qhorus PU packages must use `io.casehub.ledger.runtime` (broad) — NOT `io.casehub.ledger.runtime.model` (misses `LedgerSupplement` sub-package)
 
 **CDI wiring:** `JpaLedgerEntryRepository` is `@Alternative`. Add to `application.properties`:
 ```properties

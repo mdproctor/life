@@ -85,7 +85,11 @@ class LifeWatchdogAlertObserverTest {
     @Test
     void onAlert_oversight_createsEscalationTaskAndMarksExpired() {
         final String correlationId = insertRecord("life/del-obs-oversight", CommitmentMode.OVERSIGHT,
-                r -> r.delegateTo = "Buy new car:household-task");
+                r -> {
+                    r.delegateTo = "Buy new car:household-task";
+                    r.amountThreshold = java.math.BigDecimal.valueOf(5000);
+                    r.purchaseCategory = "vehicle";
+                });
         final long workItemsBefore = WorkItem.count();
 
         observer.onAlert(approvalPendingEvent("life/del-obs-oversight"));

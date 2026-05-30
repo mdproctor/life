@@ -11,5 +11,6 @@ public record ExternalActorResponse(
         LifeActorType actorType,
         String contactMethod,
         String contactValue,
-        Instant createdAt
+        Instant createdAt,
+        Instant gdprErasedAt
 ) {}

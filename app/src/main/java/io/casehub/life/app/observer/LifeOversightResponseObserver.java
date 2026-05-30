@@ -53,6 +53,7 @@ public class LifeOversightResponseObserver implements MessageObserver {
                         && r.status == CommitmentStatus.PENDING_RESPONSE)
                 .ifPresent(record -> {
                     try {
+                        record.approvedBy = event.senderId();
                         final CreateLifeTaskRequest pending = objectMapper.readValue(
                                 record.pendingTaskJson, CreateLifeTaskRequest.class);
                         final LifeTaskResponse created = lifeTaskService.create(pending);

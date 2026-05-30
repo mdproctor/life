@@ -36,6 +36,9 @@ public class ExternalActor extends PanacheEntityBase {
     @Column(name = "created_at", nullable = false)
     public Instant createdAt;
 
+    @Column(name = "gdpr_erased_at")
+    public Instant gdprErasedAt;
+
     @PrePersist
     void prePersist() {
         if (id == null) {

@@ -176,7 +176,9 @@ class LifeCommitmentResourceTest {
                 .body("""
                         {
                           "deadline":"%s",
-                          "pendingTask":{"templateRef":"household-task","title":"Buy new sofa"}
+                          "pendingTask":{"templateRef":"household-task","title":"Buy new sofa"},
+                          "amountThreshold":1500.00,
+                          "purchaseCategory":"furniture"
                         }
                         """.formatted(Instant.now().plus(24, ChronoUnit.HOURS)))
                 .when().post("/life-oversight-gates")
@@ -192,7 +194,9 @@ class LifeCommitmentResourceTest {
         final String body = """
                 {
                   "deadline":"%s",
-                  "pendingTask":{"templateRef":"household-task","title":"Duplicate gate task"}
+                  "pendingTask":{"templateRef":"household-task","title":"Duplicate gate task"},
+                  "amountThreshold":500.00,
+                  "purchaseCategory":"household"
                 }
                 """.formatted(Instant.now().plus(24, ChronoUnit.HOURS));
 

@@ -7,18 +7,26 @@ import io.casehub.life.api.response.ExternalActorResponse;
 import io.casehub.life.api.response.LifeTaskContextResponse;
 import io.casehub.life.app.entity.ExternalActor;
 import io.casehub.life.app.entity.LifeTaskContext;
+import io.casehub.life.app.service.ledger.LifeLedgerWriter;
+import io.casehub.work.runtime.model.WorkItem;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.ClientErrorException;
 import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 @ApplicationScoped
 public class ExternalActorService {
+
+    @Inject
+    LifeLedgerWriter lifeLedgerWriter;
 
     @Transactional
     public ExternalActorResponse create(final CreateExternalActorRequest req) {
@@ -66,6 +74,35 @@ public class ExternalActorService {
         actor.delete();
     }
 
+    @Transactional
+    public void erase(final UUID id) {
+        final ExternalActor actor = ExternalActor.<ExternalActor>findByIdOptional(id)
+                .orElseThrow(NotFoundException::new);
+
+        if (actor.gdprErasedAt != null) {
+            throw new WebApplicationException(
+                    "ExternalActor already erased at " + actor.gdprErasedAt, 409);
+        }
+
+        final long activeTasks = LifeTaskContext.<LifeTaskContext>list("externalActorId", id)
+                .stream()
+                .filter(ctx -> {
+                    final var wi = WorkItem.<WorkItem>findByIdOptional(ctx.workItemId).orElse(null);
+                    return wi != null && wi.status.isActive();
+                })
+                .count();
+        if (activeTasks > 0) {
+            throw new WebApplicationException(
+                    "ExternalActor has " + activeTasks + " active task(s) — close before erasure", 409);
+        }
+
+        actor.name = "[ERASED]";
+        actor.contactValue = "[ERASED]";
+        actor.gdprErasedAt = Instant.now();
+
+        lifeLedgerWriter.writeErasureEntry(actor, "household-admin");
+    }
+
     public List<LifeTaskContextResponse> listTasks(final UUID actorId) {
         return LifeTaskContext.<LifeTaskContext>list("externalActorId", actorId)
                 .stream()
@@ -80,7 +117,8 @@ public class ExternalActorService {
                 actor.actorType,
                 actor.contactMethod,
                 actor.contactValue,
-                actor.createdAt
+                actor.createdAt,
+                actor.gdprErasedAt
         );
     }
 }

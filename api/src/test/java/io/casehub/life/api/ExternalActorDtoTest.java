@@ -31,8 +31,9 @@ class ExternalActorDtoTest {
     void response_holdsAllFields() {
         var id = UUID.randomUUID();
         var now = Instant.now();
-        var resp = new ExternalActorResponse(id, "Bob's Plumbing", LifeActorType.EXTERNAL_HUMAN, "phone", "+44-7700-900100", now);
+        var resp = new ExternalActorResponse(id, "Bob's Plumbing", LifeActorType.EXTERNAL_HUMAN, "phone", "+44-7700-900100", now, null);
         assertThat(resp.id()).isEqualTo(id);
         assertThat(resp.createdAt()).isEqualTo(now);
+        assertThat(resp.gdprErasedAt()).isNull();
     }
 }
