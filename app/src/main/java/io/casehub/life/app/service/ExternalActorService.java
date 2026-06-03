@@ -1,5 +1,7 @@
 package io.casehub.life.app.service;
 
+import io.casehub.ledger.runtime.service.TrustGateService;
+import io.casehub.life.api.LifeActorIds;
 import io.casehub.life.api.LifeActorType;
 import io.casehub.life.api.request.CreateExternalActorRequest;
 import io.casehub.life.api.request.UpdateExternalActorRequest;
@@ -19,6 +21,7 @@ import jakarta.ws.rs.core.Response;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,6 +30,9 @@ public class ExternalActorService {
 
     @Inject
     LifeLedgerWriter lifeLedgerWriter;
+
+    @Inject
+    TrustGateService trustGateService;
 
     @Transactional
     public ExternalActorResponse create(final CreateExternalActorRequest req) {
@@ -111,6 +117,16 @@ public class ExternalActorService {
     }
 
     private ExternalActorResponse toResponse(final ExternalActor actor) {
+        ExternalActorResponse.TrustProfile profile;
+        if (actor.gdprErasedAt != null) {
+            profile = ExternalActorResponse.TrustProfile.EMPTY;
+        } else {
+            String actorId = LifeActorIds.of(actor.id);
+            Double global = trustGateService.currentScore(actorId).orElse(null);
+            Map<String, Double> dimensions = trustGateService.dimensionScores(actorId);
+            Map<String, Double> capabilities = trustGateService.allCapabilityScores(actorId);
+            profile = new ExternalActorResponse.TrustProfile(global, dimensions, capabilities);
+        }
         return new ExternalActorResponse(
                 actor.id,
                 actor.name,
@@ -118,7 +134,8 @@ public class ExternalActorService {
                 actor.contactMethod,
                 actor.contactValue,
                 actor.createdAt,
-                actor.gdprErasedAt
+                actor.gdprErasedAt,
+                profile
         );
     }
 }

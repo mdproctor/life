@@ -109,7 +109,10 @@ class ExternalActorGdprResourceTest {
                 .then()
                 .statusCode(200)
                 .body("gdprErasedAt", notNullValue())
-                .body("name", equalTo("[ERASED]"));
+                .body("name", equalTo("[ERASED]"))
+                .body("trustProfile.globalScore", nullValue())
+                .body("trustProfile.dimensionScores", org.hamcrest.Matchers.aMapWithSize(0))
+                .body("trustProfile.capabilityScores", org.hamcrest.Matchers.aMapWithSize(0));
     }
 
     @Test

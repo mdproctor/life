@@ -109,6 +109,11 @@
       <version>${casehub.version}</version>
       <scope>compile</scope>
     </dependency>
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-engine-ledger</artifactId>
+      <version>${casehub.version}</version>
+    </dependency>
 
     <!-- ================================================================ -->
     <!-- Connectors — household notifications (contractor, carer alerts)   -->
@@ -134,6 +139,12 @@
     <dependency>
       <groupId>io.casehub</groupId>
       <artifactId>casehub-platform-expression</artifactId>
+    </dependency>
+    <!-- YAML-backed PreferenceProvider for trust routing thresholds.
+         @ApplicationScoped — displaces MockPreferenceProvider @DefaultBean automatically. -->
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-platform-config</artifactId>
     </dependency>
 
     <!-- ================================================================ -->

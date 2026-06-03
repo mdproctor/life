@@ -87,8 +87,8 @@ public final class LifeActorIds {
 | Method | Change |
 |---|---|
 | `writeHealthEntry` | If `ctx.externalActorId != null`, use `LifeActorIds.of(ctx.externalActorId)` + `ActorType.HUMAN`; otherwise keep `"life-system"` + `ActorType.SYSTEM` |
+| `writeLegalEntry` | Same contextual actorId pattern as `writeHealthEntry` — legal tasks can involve external actors (solicitors, notaries) |
 | `writeFinancialEntry` | No change — system action (oversight gate) |
-| `writeLegalEntry` | No change — system action (deadline tracking) |
 | `writeErasureEntry` | No change — already uses `erasedBy` parameter |
 
 `LifeDecisionLedgerObserver` already has access to `LifeTaskContext.externalActorId` — no new queries needed.

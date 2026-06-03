@@ -3,6 +3,7 @@ package io.casehub.life.app.service.ledger;
 import io.casehub.ledger.api.model.LedgerEntryType;
 import io.casehub.ledger.runtime.model.LedgerEntry;
 import io.casehub.ledger.runtime.repository.LedgerEntryRepository;
+import io.casehub.life.api.LifeActorIds;
 import io.casehub.life.app.LifeDecisionEventType;
 import io.casehub.life.app.entity.ExternalActor;
 import io.casehub.life.app.entity.LifeCommitmentRecord;
@@ -24,11 +25,21 @@ public class LifeLedgerWriter {
     @Inject
     LedgerEntryRepository ledgerRepository;
 
+    @Inject
+    LifeOutcomeAttestationWriter attestationWriter;
+
     public void writeHealthEntry(final LifeDecisionEventType eventType,
                                   final LifeTaskContext ctx,
                                   final WorkItem workItem) {
+        final String actorId = ctx.externalActorId != null
+                ? LifeActorIds.of(ctx.externalActorId)
+                : "life-system";
+        final ActorType actorType = ctx.externalActorId != null
+                ? ActorType.HUMAN
+                : ActorType.SYSTEM;
+
         final var entry = new HealthDecisionLedgerEntry();
-        populateBase(entry, ctx.workItemId, "life-system", ActorType.SYSTEM, "HealthDecisionAudit");
+        populateBase(entry, ctx.workItemId, actorId, actorType, "HealthDecisionAudit");
         entry.workItemId = ctx.workItemId;
         entry.providerId = ctx.externalActorId;
         entry.taskCategory = workItem.category;
@@ -36,6 +47,7 @@ public class LifeLedgerWriter {
         entry.eventType = eventType;
         entry.outcome = eventType == LifeDecisionEventType.COMPLETED ? workItem.outcome : null;
         ledgerRepository.save(entry);
+        attestationWriter.attestOutcome(entry, eventType, ctx, workItem);
     }
 
     public void writeFinancialEntry(final LifeDecisionEventType eventType,
@@ -55,14 +67,22 @@ public class LifeLedgerWriter {
     public void writeLegalEntry(final LifeDecisionEventType eventType,
                                  final LifeTaskContext ctx,
                                  final WorkItem workItem) {
+        final String actorId = ctx.externalActorId != null
+                ? LifeActorIds.of(ctx.externalActorId)
+                : "life-system";
+        final ActorType actorType = ctx.externalActorId != null
+                ? ActorType.HUMAN
+                : ActorType.SYSTEM;
+
         final var entry = new LegalActionLedgerEntry();
-        populateBase(entry, ctx.workItemId, "life-system", ActorType.SYSTEM, "LegalActionAudit");
+        populateBase(entry, ctx.workItemId, actorId, actorType, "LegalActionAudit");
         entry.workItemId = ctx.workItemId;
         entry.legalObligation = workItem.title;
         entry.filingDeadline = workItem.expiresAt;
         entry.eventType = eventType;
         entry.actionTaken = eventType == LifeDecisionEventType.COMPLETED ? workItem.outcome : null;
         ledgerRepository.save(entry);
+        attestationWriter.attestOutcome(entry, eventType, ctx, workItem);
     }
 
     public void writeErasureEntry(final ExternalActor actor, final String erasedBy) {

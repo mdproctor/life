@@ -36,6 +36,7 @@ import static org.mockito.Mockito.when;
 class LifeLedgerWriterTest {
 
     @Mock LedgerEntryRepository ledgerRepository;
+    @Mock LifeOutcomeAttestationWriter attestationWriter;
     @InjectMocks LifeLedgerWriter writer;
 
     private static final UUID WORK_ITEM_ID = UUID.randomUUID();

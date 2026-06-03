@@ -229,6 +229,8 @@ Read these **before designing**, not after. The concern column tells you when ea
 | Testing ledger writers (unit) | Mock `LedgerEntryRepository` with Mockito. Do NOT assert on `entry.id` or `entry.occurredAt` — these are set by `LedgerEntry.@PrePersist` which is bypassed in mocked tests. See `LifeLedgerWriterTest`. |
 | Multi-PU entity package placement | Ledger subclass entities must NOT be sub-packages of `io.casehub.life.app.entity` (default PU). Use `io.casehub.life.app.ledger` — Quarkus uses prefix matching for PU assignment; sub-packages of a default-PU package get assigned to the default PU, causing cross-PU association errors with `LedgerEntry.supplements`. |
 | Testing engine case definitions | Definition tests (verify YAML loads, binding count, goal count, capabilities) are pure unit tests — no Quarkus startup needed. Integration tests (start case → workers execute → goals met) require @QuarkusTest and are blocked on engine#410 (CaseDefinition not found after registration). |
+| Testing attestation pipeline (unit) | Mock `LedgerEntryRepository` with Mockito. Verify verdicts (SOUND/FLAGGED), capability tags, dimension scores. Guard: CREATED events produce no attestation. See `LifeOutcomeAttestationWriterTest`. |
+| Trust routing policy provider | `@QuarkusTest` — inject `TrustRoutingPolicyProvider`, verify capability→domain resolution, YAML blend factors and quality floors. See `LifeTrustRoutingPolicyProviderTest`. |
 | Engine CDI wiring | `quarkus.arc.selected-alternatives` must include `MemorySubCaseGroupRepository`, `MemoryPlanItemStore`, `MemoryReactivePlanItemStore` from casehub-engine-persistence-memory (GE-20260531-1e51d4). |
 | SubCase M-of-N in YAML | M-of-N fields (groupId, totalInGroup, requiredCount) are DSL-only — not YAML-supported. Add via Java augmentation in YamlCaseHub.getDefinition() (GE-20260531-d896bf). |
 
@@ -269,6 +271,17 @@ Note: `HouseholdTask`, `LifeGoal`, `LifeEvent` were removed in Layer 2 — they 
 - 8 YAML case definitions at `app/src/main/resources/life/`.
 - `POST /life-cases` endpoint — `LifeCaseResource`.
 - Scope retrofit: WorkItem scope changed from `"life"` to `"casehubio/life/{domain}"` (hierarchical Path format).
+
+**Layer 6 additions:**
+- `LifeActorIds` — `api/` utility for `life-actor:{uuid}` actorId convention mapping ExternalActor UUIDs to ledger actorIds.
+- `LifeOutcomeAttestationWriter` — attestation pipeline: converts WorkItem outcomes and SLA breaches into `LedgerAttestation` records with verdict (SOUND/FLAGGED), capability tag (domain-derived), and `deadline-reliability` dimension score.
+- `LifeTrustRoutingPolicyProvider` — `TrustRoutingPolicyProvider` SPI implementation with 32-entry fine-grained capability→domain mapping and 8 domain routing policies (threshold, minObservations, borderlineMargin, fallbackType, rationale).
+- `LifeTrustRoutingPolicyKeys` — `PreferenceKey` constants for YAML trust routing config (blend-factor + 4 dimension floor keys).
+- `DoublePreference` — `SingleValuePreference` record for YAML double values.
+- `LifeRoutingPolicy` — domain routing policy record (code-level design decisions).
+- `trust-routing.yaml` — YAML config at `casehub/life/trust-routing.yaml` for blend factors and quality floors per domain.
+- `TrustProfile` — nested record on `ExternalActorResponse` enriched from `TrustGateService` (globalScore, dimensionScores, capabilityScores).
+- ActorId convention: `life-actor:{uuid}` for ExternalActor behaviour in ledger entries; `"life-system"` for system actions.
 
 **Capability tags:**
 - `household-management` — routine household coordination: grocery ordering, maintenance scheduling, contractor liaison
@@ -322,7 +335,7 @@ Everything in the foundation:
 api/    — pure Java: LifeDomain enum, ExternalActor request/response records,
           CreateLifeTaskRequest, LifeTaskResponse, CommitmentMode/CommitmentStatus/
           CommitmentOutcome/CommitmentRequest/OversightGateRequest (Layer 3),
-          capability tag constants, trust dimension constants.
+          LifeActorIds (Layer 6), capability tag constants, trust dimension constants.
           Zero framework imports. No JPA.
 
 app/    — Quarkus: JPA entities (ExternalActor, LifeTaskContext, LifeCommitmentRecord,
@@ -332,7 +345,10 @@ app/    — Quarkus: JPA entities (ExternalActor, LifeTaskContext, LifeCommitmen
           LifeWatchdogAlertObserver, LifeDecisionLedgerObserver, LifeCaseTrackerObserver),
           engine (io.casehub.life.app.engine — 8 YamlCaseHub subclasses + 8 DSL companions +
           LifeCaseService + LifeCaseTrackerObserver),
-          CasePlanModel YAML definitions (app/src/main/resources/life/).
+          routing (io.casehub.life.app.routing — LifeTrustRoutingPolicyProvider +
+          LifeTrustRoutingPolicyKeys + LifeRoutingPolicy + DoublePreference),
+          CasePlanModel YAML definitions (app/src/main/resources/life/),
+          trust routing YAML config (app/src/main/resources/casehub/life/trust-routing.yaml).
           Ledger subclasses in io.casehub.life.app.ledger (qhorus PU);
           ledger join table migrations at db/life/ledger/migration/ (V2100+).
 ```
@@ -372,8 +388,13 @@ Layer 5: + casehub-engine — 8 CasePlanModel workflows (travel-plan, home-maint
          Integration tests blocked on engine#410 (CaseDefinition not found after registration).
          🔲 PENDING — integration tests blocked on engine#410
 
-Layer 6: Trust routing — trust-weighted agent routing by household domain, backed by Bayesian
-         Beta updated from WorkItem outcomes and commitment attestations.
+Layer 6: Trust routing — TrustRoutingPolicyProvider with 8 domain policies +
+         32-entry capability→domain mapping. Attestation pipeline (LifeOutcomeAttestationWriter)
+         converts outcomes to LedgerAttestation records. ExternalActor REST response enriched
+         with ledger-backed TrustProfile. casehub-engine-ledger activates TrustWeightedAgentStrategy.
+         casehub-platform-config provides YAML PreferenceProvider.
+         Single-candidate limitation: FuncDSL workers = trivial routing decisions until Layer 7.
+         🔲 PENDING — implementation complete, not yet merged
 
 Layer 7: + casehub-openclaw — OpenClaw as WorkerProvisioner; skill ecosystem (banking APIs,
          calendar integration, Home Assistant, messaging).
@@ -389,7 +410,7 @@ Layer 7: + casehub-openclaw — OpenClaw as WorkerProvisioner; skill ecosystem (
 | GDPR personal data erasure | LedgerErasureService ✅ |
 | Tamper-evident audit | CaseLedgerEntry ✅ (2026-04-26) |
 | Adaptive CasePlanModel (travel, care) | engine P0 complete |
-| Trust-weighted agent routing | P1.3 TrustWeightedSelectionStrategy wired in engine |
+| Trust-weighted agent routing | casehub-engine-ledger wired ✅; TrustRoutingPolicyProvider implemented; attestation pipeline active; single-candidate routing until Layer 7 |
 | OpenClaw as WorkerProvisioner | Pending — research spec 2026-05-25 |
 
 ---
