@@ -228,10 +228,11 @@ Read these **before designing**, not after. The concern column tells you when ea
 | Testing async CDI observers | Call the observer method directly through the injected CDI proxy — bypasses event dispatch and debounce. Method-level `@Transactional(REQUIRES_NEW)` is honoured via CDI proxy. Do NOT use `@TestTransaction` on the test method — it blocks the REQUIRES_NEW from seeing committed setup records. See GE-20260529-9f3557 and `LifeWatchdogAlertObserverTest`. |
 | Testing ledger writers (unit) | Mock `LedgerEntryRepository` with Mockito. Do NOT assert on `entry.id` or `entry.occurredAt` — these are set by `LedgerEntry.@PrePersist` which is bypassed in mocked tests. See `LifeLedgerWriterTest`. |
 | Multi-PU entity package placement | Ledger subclass entities must NOT be sub-packages of `io.casehub.life.app.entity` (default PU). Use `io.casehub.life.app.ledger` — Quarkus uses prefix matching for PU assignment; sub-packages of a default-PU package get assigned to the default PU, causing cross-PU association errors with `LedgerEntry.supplements`. |
-| Testing engine case definitions | Definition tests (verify YAML loads, binding count, goal count, capabilities) are pure unit tests — no Quarkus startup needed. Integration tests (start case → workers execute → goals met) require @QuarkusTest and are blocked on engine#410 (CaseDefinition not found after registration). |
+| Testing engine case definitions | Definition tests (verify YAML loads, binding count, goal count, capabilities) are pure unit tests — no Quarkus startup needed. Integration tests (start case → workers execute → goals met) require @QuarkusTest. See `AppointmentCycleIntegrationTest` for the pattern: `QuarkusTransaction.requiringNew()` for Panache queries inside Awaitility lambdas; filter WorkItems by `callerRef` prefix to avoid cross-test interference. |
 | Testing attestation pipeline (unit) | Mock `LedgerEntryRepository` with Mockito. Verify verdicts (SOUND/FLAGGED), capability tags, dimension scores. Guard: CREATED events produce no attestation. See `LifeOutcomeAttestationWriterTest`. |
 | Trust routing policy provider | `@QuarkusTest` — inject `TrustRoutingPolicyProvider`, verify capability→domain resolution, YAML blend factors and quality floors. See `LifeTrustRoutingPolicyProviderTest`. |
 | Engine CDI wiring | `quarkus.arc.selected-alternatives` must include `MemorySubCaseGroupRepository`, `MemoryPlanItemStore`, `MemoryReactivePlanItemStore` from casehub-engine-persistence-memory (GE-20260531-1e51d4). |
+| Engine-ledger PU packages | `io.casehub.ledger.model` must be in the qhorus PU packages — this is `casehub-engine-ledger`'s entity package (e.g. `WorkerDecisionEntry`, `CaseLedgerEntry`), distinct from `io.casehub.ledger.runtime` (casehub-ledger base). Without it: `Unknown entity type 'WorkerDecisionEntry' does not belong to this persistence unit`. |
 | SubCase M-of-N in YAML | M-of-N fields (groupId, totalInGroup, requiredCount) are DSL-only — not YAML-supported. Add via Java augmentation in YamlCaseHub.getDefinition() (GE-20260531-d896bf). |
 
 ---
@@ -385,8 +386,8 @@ Layer 5: + casehub-engine — 8 CasePlanModel workflows (travel-plan, home-maint
          care-coordination, appointment-cycle, contractor-coordination, financial-review,
          family-vote, care-episode). Parallel execution, adaptive gates, M-of-N SubCase
          quorum, QhorusMessageSignalBridge, cross-case signals, milestones, FuncDSL workers.
-         Integration tests blocked on engine#410 (CaseDefinition not found after registration).
-         🔲 PENDING — integration tests blocked on engine#410
+         Integration tests re-enabled (engine#410 resolved — commit 66a6e34).
+         ✅ COMPLETE
 
 Layer 6: Trust routing — TrustRoutingPolicyProvider with 8 domain policies +
          32-entry capability→domain mapping. Attestation pipeline (LifeOutcomeAttestationWriter)

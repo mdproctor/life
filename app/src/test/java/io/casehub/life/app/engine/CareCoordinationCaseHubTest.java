@@ -35,7 +35,6 @@ import java.util.Set;
  * <p>Verifies that the YAML loads correctly, augmented workers are present,
  * milestones are defined, SubCase binding exists, and adaptive escalation
  * has correct conditions.
- * Does not start a case — engine#408 prevents worker execution.
  */
 @QuarkusTest
 class CareCoordinationCaseHubTest {

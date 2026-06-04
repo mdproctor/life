@@ -385,7 +385,7 @@ Eight case definitions cover the full breadth of engine capabilities:
 - **family-vote** — lightweight M-of-N child case (single humanTask per voter)
 - **care-episode** — child case spawned by care-coordination (assess → provide care → record notes)
 
-Not closed here: integration tests `@Disabled` (engine#410 — CaseDefinition forward lookup failure). Engine-level compliance ledger (`casehub-engine-ledger`) deferred to Layer 6.
+Integration tests re-enabled (engine#410 resolved — commit 66a6e34, life#23). Engine-level compliance ledger (`casehub-engine-ledger`) deferred to Layer 6.
 
 ### Accountability gaps closed
 
@@ -463,10 +463,10 @@ Not closed here: integration tests `@Disabled` (engine#410 — CaseDefinition fo
   - **Cause:** Maven Surefire `rerunFailingTestsCount` retries flaky tests silently. An `assumeTrue()` guard intended to skip tests when the engine bug (#410) is present interacts with Surefire retry: the assumption failure counts as a test failure, Surefire retries, the second run passes because the assumption guard succeeds.
   - **Fix:** Use `@Disabled("engine#410")` instead of `assumeTrue()` for known engine bugs. Reserve `assumeTrue()` for environment-conditional tests (Docker availability, OS-specific).
 
-- **CaseDefinition forward lookup failure (engine#410)**
+- **CaseDefinition forward lookup failure (engine#410)** — RESOLVED (commit 66a6e34, life#23)
   - **Symptom:** `SchedulerService.getCaseDefinition(caseKey)` returns null after the definition was successfully registered at startup. Integration tests fail with NPE in the scheduling path.
-  - **Cause:** Suspected Vert.x event bus serialization dropping fields from `CaseMetaModel` key during `CaseStartedEvent` handler chain. Reverse lookup on the same `ConcurrentHashMap` succeeds.
-  - **Fix:** Filed as engine#410. Integration tests `@Disabled` until fixed. Definition tests (YAML loads, binding counts, goal verification) are unaffected — they don't go through `SchedulerService`.
+  - **Cause:** Mutable-hashCode map key in `DefaultCaseDefinitionRegistry`. Fixed with immutable `CaseKey` record + `RegistryEntry` map.
+  - **Resolution:** engine#410 fixed. Integration tests re-enabled. Additional fixes needed: remove WAITING state assertion (engine doesn't transition to WAITING for humanTasks), add `QuarkusTransaction.requiringNew()` for Panache in Awaitility lambdas, filter WorkItems by `callerRef` to prevent cross-test interference, add `io.casehub.ledger.model` to qhorus PU packages for `WorkerDecisionEntry`.
 
 ### Pattern to replicate
 

@@ -34,7 +34,6 @@ import java.util.Set;
  * <p>Verifies that the YAML loads correctly and the augmented workers are present.
  * This case is only spawned as a sub-case by care-coordination — not used directly
  * by LifeCaseService.
- * Does not start a case — engine#408 prevents worker execution.
  */
 @QuarkusTest
 class CareEpisodeCaseHubTest {

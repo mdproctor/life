@@ -36,7 +36,6 @@ import java.util.Set;
  * <p>Verifies that the YAML loads correctly, augmented workers and M-of-N SubCase
  * bindings are present, parallel bindings share the same trigger condition,
  * and adaptive gates have correct conditions.
- * Does not start a case — engine#408 prevents worker execution.
  */
 @QuarkusTest
 class TravelPlanCaseHubTest {
