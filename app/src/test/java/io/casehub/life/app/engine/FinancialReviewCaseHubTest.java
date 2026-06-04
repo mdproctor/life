@@ -31,7 +31,6 @@ import java.util.Set;
  * Definition test for the financial-review CaseHub.
  *
  * <p>Verifies that the YAML loads correctly and the augmented workers are present.
- * Does not start a case — engine#408 prevents worker execution.
  */
 @QuarkusTest
 class FinancialReviewCaseHubTest {

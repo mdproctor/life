@@ -945,7 +945,7 @@ Eight case definitions cover the full engine capability set:
 - **family-vote** — lightweight M-of-N child case (single humanTask per voter)
 - **care-episode** — child case for care-coordination SubCase
 
-Not closed here: integration tests `@Disabled` (engine#410). Engine-level compliance ledger deferred to Layer 6.
+Integration tests re-enabled (engine#410 resolved — commit 66a6e34, life#23). Engine-level compliance ledger deferred to Layer 6.
 
 #### Accountability gaps closed
 
@@ -1022,10 +1022,10 @@ Not closed here: integration tests `@Disabled` (engine#410). Engine-level compli
   - **Cause:** `assumeTrue()` failure counts as test failure, Surefire retries, second run passes.
   - **Fix:** Use `@Disabled("engine#410")` for known engine bugs. Reserve `assumeTrue()` for environment-conditional tests.
 
-- **CaseDefinition forward lookup failure (engine#410)**
+- **CaseDefinition forward lookup failure (engine#410)** — RESOLVED (commit 66a6e34, life#23)
   - **Symptom:** `SchedulerService.getCaseDefinition(caseKey)` returns null after successful registration. Integration tests fail with NPE.
-  - **Cause:** Suspected Vert.x event bus serialization dropping fields from `CaseMetaModel` key.
-  - **Fix:** Filed as engine#410. Integration tests `@Disabled`. Definition tests (YAML loads, binding counts) unaffected.
+  - **Cause:** Mutable-hashCode map key in `DefaultCaseDefinitionRegistry`. Fixed with immutable `CaseKey` record.
+  - **Resolution:** Integration tests re-enabled. Additional fixes: remove WAITING assertion, `QuarkusTransaction.requiringNew()` for Awaitility + Panache, `callerRef` filter for WorkItem isolation, `io.casehub.ledger.model` added to qhorus PU.
 
 #### Pattern to replicate
 
@@ -1120,7 +1120,7 @@ Decisions that span multiple layers or are cross-cutting. Layer-specific decisio
 
 | Risk / Debt | Impact | Status | Mitigation |
 |---|---|---|---|
-| engine#410 — CaseDefinition forward lookup failure | Integration tests `@Disabled`; golden path untested in @QuarkusTest | OPEN | Definition tests (YAML loads, binding counts) pass. Filed on casehubio/engine. |
+| engine#410 — CaseDefinition forward lookup failure | Integration tests `@Disabled`; golden path untested in @QuarkusTest | RESOLVED (life#23) | Fixed in engine commit 66a6e34. Integration tests re-enabled and passing (233/233). |
 | Missing L2 and L4 blog entries | Chapter entries C1 and C3 reference no blog for narrative context | Documentation gap | Session handovers contain the narrative; blog entries can be written retroactively |
 | `casehub-engine-persistence-memory` at compile scope | No persistence durability across restarts | Accepted for harness | Production uses `casehub-engine-persistence-hibernate` |
 | Auth not yet wired | `actorId` conventions (`"life-system"`, `"household-admin"`) are placeholder strings | Tracked by `auth-retrofit-readiness.md` | REST resources accept `@RolesAllowed` without structural change |
