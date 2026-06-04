@@ -1,18 +1,3 @@
-/*
- * Copyright 2026-Present The Case Hub Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package io.casehub.life.app;
 
 import io.casehub.api.spi.routing.TrustRoutingPolicy;
@@ -21,25 +6,16 @@ import io.casehub.ledger.runtime.service.TrustGateService;
 import io.casehub.life.api.LifeActorIds;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
+import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.*;
 
-/**
- * Verifies graceful behavior when no trust data exists (cold start scenario).
- *
- * <p>On first deployment or after data wipe, the trust routing layer should:
- * <ul>
- *   <li>Return routing policies even with no historical trust data (code-driven, not data-driven)</li>
- *   <li>Return empty trust scores for unknown actors</li>
- *   <li>Return default routing policy for unknown capabilities</li>
- * </ul>
- *
- * <p>This ensures the system boots and routes work even before any trust attestations
- * have been recorded.
- */
 @QuarkusTest
 class ColdStartBehaviorTest {
 
@@ -49,41 +25,54 @@ class ColdStartBehaviorTest {
     @Inject
     TrustGateService trustGateService;
 
-    /**
-     * Verifies that routing policies are available from the provider even with no trust data.
-     * The policy threshold (0.75 by default) is code-driven, not loaded from a database.
-     */
+    @BeforeEach
+    @Transactional
+    void seedTemplate() {
+        LifeTestFixtures.seedStandardTemplates();
+    }
+
     @Test
     void policiesAvailableWithNoTrustData() {
         var policy = policyProvider.forCapability("book-appointment");
-        assertThat(policy)
-                .isNotNull()
-                .as("TrustRoutingPolicy should be available for known capability");
-        assertThat(policy.threshold())
-                .isEqualTo(0.75)
-                .as("Policy threshold should match configured default");
+        assertThat(policy).isNotNull();
+        assertThat(policy.threshold()).isEqualTo(0.75);
     }
 
-    /**
-     * Verifies that TrustGateService is available for injection.
-     * This ensures the trust scoring layer is wired and available at startup.
-     */
-    @Test
-    void trustGateServiceIsAvailable() {
-        assertThat(trustGateService)
-                .isNotNull()
-                .as("TrustGateService should be available for injection");
-    }
-
-    /**
-     * Verifies that unknown capabilities return the default routing policy.
-     * This ensures graceful fallback for capabilities not explicitly configured.
-     */
     @Test
     void unknownCapabilityReturnsDefaultPolicy() {
         var policy = policyProvider.forCapability("nonexistent-capability");
-        assertThat(policy)
-                .isEqualTo(TrustRoutingPolicy.DEFAULT)
-                .as("Unknown capability should return DEFAULT policy");
+        assertThat(policy).isEqualTo(TrustRoutingPolicy.DEFAULT);
+    }
+
+    @Test
+    void trustGateReturnsEmptyForUnknownActor() {
+        String unknownActorId = LifeActorIds.of(UUID.randomUUID());
+        assertThat(trustGateService.currentScore(unknownActorId)).isEmpty();
+    }
+
+    @Test
+    void trustGateDimensionScoresEmptyForUnknownActor() {
+        String unknownActorId = LifeActorIds.of(UUID.randomUUID());
+        assertThat(trustGateService.dimensionScores(unknownActorId)).isEmpty();
+    }
+
+    @Test
+    void restEndpointReturnsColdStartTrustProfile() {
+        String actorId = given()
+                .contentType("application/json")
+                .body("""
+                        {"name":"Cold Start Actor","actorType":"EXTERNAL_HUMAN","contactMethod":"phone","contactValue":"+44-7700-900099"}
+                        """)
+                .when().post("/external-actors")
+                .then().statusCode(201)
+                .extract().path("id");
+
+        given()
+                .when().get("/external-actors/{id}", actorId)
+                .then()
+                .statusCode(200)
+                .body("trustProfile.globalScore", nullValue())
+                .body("trustProfile.dimensionScores", anEmptyMap())
+                .body("trustProfile.capabilityScores", anEmptyMap());
     }
 }

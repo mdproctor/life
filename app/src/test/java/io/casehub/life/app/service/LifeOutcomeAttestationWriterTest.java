@@ -61,7 +61,7 @@ class LifeOutcomeAttestationWriterTest {
         verify(ledgerRepository, atLeastOnce()).saveAttestation(captor.capture());
 
         var verdictAttestations = captor.getAllValues().stream()
-                .filter(a -> a.verdict != null)
+                .filter(a -> a.trustDimension == null)
                 .toList();
 
         assertThat(verdictAttestations).hasSize(1);
@@ -96,7 +96,7 @@ class LifeOutcomeAttestationWriterTest {
         verify(ledgerRepository, atLeastOnce()).saveAttestation(captor.capture());
 
         var verdictAttestations = captor.getAllValues().stream()
-                .filter(a -> a.verdict != null)
+                .filter(a -> a.trustDimension == null)
                 .toList();
 
         assertThat(verdictAttestations).hasSize(1);
@@ -194,7 +194,7 @@ class LifeOutcomeAttestationWriterTest {
         verify(ledgerRepository, atLeastOnce()).saveAttestation(captor.capture());
 
         var verdictAttestations = captor.getAllValues().stream()
-                .filter(a -> a.verdict != null)
+                .filter(a -> a.trustDimension == null)
                 .toList();
 
         assertThat(verdictAttestations).hasSize(1);

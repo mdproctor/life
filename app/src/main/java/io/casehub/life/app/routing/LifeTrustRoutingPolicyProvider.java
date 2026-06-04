@@ -3,6 +3,7 @@ package io.casehub.life.app.routing;
 import io.casehub.api.spi.routing.TrustRoutingPolicy;
 import io.casehub.api.spi.routing.TrustRoutingPolicyProvider;
 import io.casehub.life.api.LifeCapabilities;
+import io.casehub.platform.api.preferences.PreferenceKey;
 import io.casehub.platform.api.preferences.PreferenceProvider;
 import io.casehub.platform.api.preferences.Preferences;
 import io.casehub.platform.api.preferences.SettingsScope;
@@ -56,10 +57,10 @@ public class LifeTrustRoutingPolicyProvider implements TrustRoutingPolicyProvide
 
     private Map<String, Double> buildQualityFloors(Preferences prefs) {
         Map<String, Double> floors = new HashMap<>();
-        for (Map.Entry<String, io.casehub.platform.api.preferences.PreferenceKey<DoublePreference>> entry
+        for (Map.Entry<String, PreferenceKey<DoublePreference>> entry
                 : LifeTrustRoutingPolicyKeys.allFloorKeys().entrySet()) {
             String dimensionName = entry.getKey();
-            io.casehub.platform.api.preferences.PreferenceKey<DoublePreference> key = entry.getValue();
+            PreferenceKey<DoublePreference> key = entry.getValue();
             DoublePreference value = prefs.get(key);
             if (value != null && value.value() > 0.0) {
                 floors.put(dimensionName, value.value());
