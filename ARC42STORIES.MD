@@ -139,7 +139,7 @@ See `../parent/docs/PLATFORM.md` Capability Ownership table for the full boundar
 | casehub-qhorus | `casehub-qhorus` | L3 | ✅ complete |
 | casehub-ledger | `casehub-ledger` | L4 | ✅ complete |
 | casehub-engine | `casehub-engine` | L5 | ✅ complete |
-| Trust routing | `casehub-ledger` (trust APIs) | L6 | 🔲 pending |
+| Trust routing | `casehub-ledger` (trust APIs) | L6 | ✅ complete |
 | casehub-openclaw | `casehub-openclaw` | L7 | 🔲 pending |
 
 ### Chapter Sequencing Rationale
@@ -156,7 +156,7 @@ See `../parent/docs/PLATFORM.md` Capability Ownership table for the full boundar
 
 ### Layer Architecture View
 
-Current delivery state — Layers 1–5 complete. Layers 6–7 pending.
+Current delivery state — Layers 1–6 complete. Layer 7 pending.
 
 ```mermaid
 C4Container
@@ -405,7 +405,7 @@ flowchart LR
 | 2 | Commitments | Household Automation | + L3 | High | ✅ |
 | 3 | Audit Trail | Household Automation | + L4 | High | ✅ |
 | 4 | Workflows | Household Automation | + L5 | High | ✅ |
-| 5 | Trust Routing | Household Automation | + L6 | Medium | 🔲 |
+| 5 | Trust Routing | Household Automation | + L6 | Medium | ✅ |
 | 6 | Agent Skills | Household Automation | + L7 | High | 🔲 |
 
 ### Layer × Chapter Matrix
@@ -531,10 +531,10 @@ Multi-step household workflows orchestrated via CasePlanModel — travel plannin
 
 ### Chapter 5 — Trust Routing
 
-**Journey:** Household Automation | **Sequence:** 5 of 6 | **Status:** 🔲
+**Journey:** Household Automation | **Sequence:** 5 of 6 | **Status:** ✅
 **Issues:** #7, #11
 
-🔲 Full entry at C5 close. Blocked on Layer 6 implementation.
+Layer 6 delivered: TrustRoutingPolicyProvider with 8 domain policies, 32-entry capability→domain mapping, attestation pipeline (LifeOutcomeAttestationWriter), ExternalActor REST response enriched with TrustProfile. Single-candidate routing until Layer 7 adds OpenClaw WorkerProvisioner.
 
 **Layer Impact**
 
