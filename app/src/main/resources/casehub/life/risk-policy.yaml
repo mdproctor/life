@@ -1,0 +1,6 @@
+entries:
+  - scope: casehubio/life/risk-policy
+    casehubio.life.risk-policy.spend.threshold: "100.0"
+    casehubio.life.risk-policy.contractor.threshold: "200.0"
+    casehubio.life.risk-policy.booking.threshold: "150.0"
+    casehubio.life.risk-policy.approval.expires-hours: "24.0"
