@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
+import io.casehub.api.model.evaluator.ListEvaluator;
 
 /**
  * Definition test for the contractor-coordination CaseHub.
@@ -77,7 +78,7 @@ class ContractorCoordinationCaseHubTest {
                 .orElseThrow();
         assertTrue(binding.target() instanceof HumanTaskTarget ht
                 && "Approve contractor quote".equals(ht.title())
-                && ht.candidateGroups().contains("household-admin")
+                && ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("household-admin")
                 && "casehubio/life/household".equals(ht.scope()));
     }
 
@@ -89,7 +90,7 @@ class ContractorCoordinationCaseHubTest {
                 .orElseThrow();
         assertTrue(binding.target() instanceof HumanTaskTarget ht
                 && "Confirm contractor payment".equals(ht.title())
-                && ht.candidateGroups().contains("household-admin")
+                && ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("household-admin")
                 && "casehubio/life/finance".equals(ht.scope()));
     }
 

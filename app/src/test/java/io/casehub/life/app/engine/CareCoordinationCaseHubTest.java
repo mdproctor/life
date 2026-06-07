@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
+import io.casehub.api.model.evaluator.ListEvaluator;
 
 /**
  * Definition test for the care-coordination CaseHub.
@@ -100,7 +101,7 @@ class CareCoordinationCaseHubTest {
                 .orElseThrow();
         assertTrue(binding.target() instanceof HumanTaskTarget ht
                 && "Accept care delegation".equals(ht.title())
-                && ht.candidateGroups().contains("household-member")
+                && ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("household-member")
                 && "casehubio/life/elder-care".equals(ht.scope()));
     }
 
@@ -131,7 +132,7 @@ class CareCoordinationCaseHubTest {
         assertTrue(binding.getWhen() instanceof JQExpressionEvaluator jq
                 && jq.expression().contains("healthConcern == true"));
         assertTrue(binding.target() instanceof HumanTaskTarget ht
-                && ht.candidateGroups().contains("household-admin")
+                && ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("household-admin")
                 && "casehubio/life/elder-care".equals(ht.scope()));
     }
 
@@ -143,7 +144,7 @@ class CareCoordinationCaseHubTest {
                 .orElseThrow();
         assertTrue(binding.target() instanceof HumanTaskTarget ht
                 && "Review care quality".equals(ht.title())
-                && ht.candidateGroups().contains("household-admin")
+                && ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("household-admin")
                 && "casehubio/life/elder-care".equals(ht.scope()));
     }
 

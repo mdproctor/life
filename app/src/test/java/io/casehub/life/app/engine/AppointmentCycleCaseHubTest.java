@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
+import io.casehub.api.model.evaluator.ListEvaluator;
 
 /**
  * Unit-level integration test for the appointment-cycle CaseHub definition.
@@ -77,7 +78,7 @@ class AppointmentCycleCaseHubTest {
                 .orElseThrow();
         assertTrue(binding.target() instanceof HumanTaskTarget ht
                 && "Record post-visit notes".equals(ht.title())
-                && ht.candidateGroups().contains("household-member")
+                && ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("household-member")
                 && "casehubio/life/health".equals(ht.scope()));
     }
 

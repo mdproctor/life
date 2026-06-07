@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
+import io.casehub.api.model.evaluator.ListEvaluator;
 
 /**
  * Definition test for the travel-plan CaseHub.
@@ -120,7 +121,7 @@ class TravelPlanCaseHubTest {
                 .orElseThrow();
         assertTrue(binding.target() instanceof HumanTaskTarget ht
                 && "Approve travel booking".equals(ht.title())
-                && ht.candidateGroups().contains("household-admin")
+                && ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("household-admin")
                 && "casehubio/life/finance".equals(ht.scope()));
     }
 

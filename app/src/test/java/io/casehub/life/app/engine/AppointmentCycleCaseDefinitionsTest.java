@@ -23,6 +23,7 @@ import io.casehub.api.model.CaseDefinition;
 import io.casehub.api.model.GoalKind;
 import io.casehub.api.model.HumanTaskTarget;
 import org.junit.jupiter.api.Test;
+import io.casehub.api.model.evaluator.ListEvaluator;
 
 /**
  * Verifies the fluent DSL companion produces a valid CaseDefinition with the
@@ -89,7 +90,7 @@ class AppointmentCycleCaseDefinitionsTest {
                 .orElseThrow();
         assertTrue(binding.target() instanceof HumanTaskTarget ht
                 && "Record post-visit notes".equals(ht.title())
-                && ht.candidateGroups().contains("household-member")
+                && ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("household-member")
                 && "casehubio/life/health".equals(ht.scope()));
     }
 }
