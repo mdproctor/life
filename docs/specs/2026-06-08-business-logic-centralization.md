@@ -323,11 +323,11 @@ public interface HouseholdRiskRule {
             Duration.ofHours(hours), OVERSIGHT_SCOPE);
     }
 
-    default OptionalDouble parseAmount(Map<String, Object> context) {
+    default Optional<Double> parseAmount(Map<String, Object> context) {
         Object raw = context.get("amount");
-        if (raw == null) return OptionalDouble.empty();
-        try { return OptionalDouble.of(Double.parseDouble(raw.toString())); }
-        catch (NumberFormatException e) { return OptionalDouble.empty(); }
+        if (raw == null) return Optional.empty();
+        try { return Optional.of(Double.parseDouble(raw.toString())); }
+        catch (NumberFormatException e) { return Optional.empty(); }
     }
 
     default String formatAmount(Map<String, Object> context) {
@@ -353,7 +353,7 @@ public final class SpendPurchaseRule implements HouseholdRiskRule {
     public RiskDecision evaluate(PlannedAction action, Preferences prefs) {
         return parseAmount(action.context())
             .filter(a -> a >= prefs.get(LifeRiskPolicyKeys.SPEND_THRESHOLD).value())
-            .mapToObj(a -> (RiskDecision) gate(SPEND_PURCHASE, action, prefs,
+            .map(a -> (RiskDecision) gate(SPEND_PURCHASE, action, prefs,
                 "Spend of " + formatAmount(action.context()) + " requires household approval"))
             .orElse(new RiskDecision.Autonomous());
     }
@@ -594,6 +594,8 @@ app/
 - `LifeActionRiskClassifierQuarkusTest` — CDI wiring still satisfied
 - `LifeTrustRoutingPolicyProviderTest` — routing policy values unchanged (derived from descriptors), YAML overlay still works; verify `@PostConstruct` index resolves all expected worker capability names
 - `LifeSlaBreachPolicyTest` — per-domain escalation deadlines verified via `@QuarkusTest`
+- `LifeWatchdogAlertObserverTest` — three new assertions: (1) OVERSIGHT records route to `FinanceDomainLedgerHandler.writeEntry(SLA_BREACH, record)` via commitment-based overload; (2) escalation title comes from `LifeCommitmentStrategy.escalationTitle(record)` for each mode; (3) `LifeLedgerWriter` is not called (no injection, no interaction)
+- `LifeOutcomeAttestationWriterTest` — update mock expectations: `DOMAIN_TO_CAPABILITY` static map disappears; assertions now verify capability strings returned by `domain.descriptor().capability()` for each domain; scope-parse fallback test uses `LifeDomain.valueOf(...)` path
 
 ---
 
