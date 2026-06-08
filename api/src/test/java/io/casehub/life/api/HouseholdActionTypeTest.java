@@ -80,23 +80,4 @@ class HouseholdActionTypeTest {
         assertEquals(HouseholdActionType.GatePolicy.NEVER, HEALTH_APPOINTMENT_GP.gatePolicy());
     }
 
-    @Test
-    void spendPurchase_usesSpendThresholdCategory() {
-        assertEquals(HouseholdActionType.ThresholdCategory.SPEND, SPEND_PURCHASE.thresholdCategory());
-    }
-
-    @Test
-    void contractorEngage_usesContractorThresholdCategory() {
-        assertEquals(HouseholdActionType.ThresholdCategory.CONTRACTOR, CONTRACTOR_ENGAGE.thresholdCategory());
-    }
-
-    @Test
-    void bookingRefundable_usesBookingThresholdCategory() {
-        assertEquals(HouseholdActionType.ThresholdCategory.BOOKING, BOOKING_REFUNDABLE.thresholdCategory());
-    }
-
-    @Test
-    void spendSubscriptionModify_usesSpendThresholdCategory() {
-        assertEquals(HouseholdActionType.ThresholdCategory.SPEND, SPEND_SUBSCRIPTION_MODIFY.thresholdCategory());
-    }
 }

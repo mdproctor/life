@@ -6,56 +6,57 @@ import java.util.Optional;
 /**
  * Typed taxonomy of consequential household actions declared by workers before execution.
  * Workers use actionType() when constructing PlannedAction; fromActionType() reverses the mapping.
- * Each constant encodes its inherent domain properties — gatePolicy, thresholdCategory,
- * reversible, candidateGroups — so all logic for a type lives here.
+ * Each constant encodes its inherent domain properties — gatePolicy, reversible, candidateGroups
+ * — so all logic for a type lives here. Threshold key resolution is handled in app/ routing
+ * via LifeRiskPolicyKeys, not in this enum.
  */
 public enum HouseholdActionType {
 
     SPEND_PURCHASE(
-        GatePolicy.AMOUNT_THRESHOLD, ThresholdCategory.SPEND, true,
+        GatePolicy.AMOUNT_THRESHOLD, true,
         List.of(HouseholdGroups.ADMIN)),
 
     SPEND_SUBSCRIPTION_CANCEL(
-        GatePolicy.ALWAYS, null, false,
+        GatePolicy.ALWAYS, false,
         List.of(HouseholdGroups.ADMIN)),
 
     SPEND_SUBSCRIPTION_MODIFY(
-        GatePolicy.AMOUNT_THRESHOLD, ThresholdCategory.SPEND, true,
+        GatePolicy.AMOUNT_THRESHOLD, true,
         List.of(HouseholdGroups.ADMIN)),
 
     BOOKING_NONREFUNDABLE(
-        GatePolicy.ALWAYS, null, false,
+        GatePolicy.ALWAYS, false,
         List.of(HouseholdGroups.ADMIN)),
 
     BOOKING_REFUNDABLE(
-        GatePolicy.AMOUNT_THRESHOLD, ThresholdCategory.BOOKING, true,
+        GatePolicy.AMOUNT_THRESHOLD, true,
         List.of(HouseholdGroups.ADMIN)),
 
     HEALTH_APPOINTMENT_SPECIALIST(
-        GatePolicy.ALWAYS, null, true,
+        GatePolicy.ALWAYS, true,
         List.of(HouseholdGroups.ADMIN)),
 
     /** Routine GP booking — no gate required. */
     HEALTH_APPOINTMENT_GP(
-        GatePolicy.NEVER, null, true,
+        GatePolicy.NEVER, true,
         List.of()),
 
     /** Medication interaction — irreversible safety concern; any adult can approve (speed matters). */
     HEALTH_MEDICATION_FLAG(
-        GatePolicy.ALWAYS, null, false,
+        GatePolicy.ALWAYS, false,
         List.of(HouseholdGroups.ADMIN, HouseholdGroups.MEMBER)),
 
     CONTRACTOR_ENGAGE(
-        GatePolicy.AMOUNT_THRESHOLD, ThresholdCategory.CONTRACTOR, true,
+        GatePolicy.AMOUNT_THRESHOLD, true,
         List.of(HouseholdGroups.ADMIN)),
 
     LEGAL_DOCUMENT_SUBMIT(
-        GatePolicy.ALWAYS, null, false,
+        GatePolicy.ALWAYS, false,
         List.of(HouseholdGroups.ADMIN)),
 
     /** Care decision for a dependent — any adult can approve (urgency matters). */
     ELDER_CARE_DECISION(
-        GatePolicy.ALWAYS, null, true,
+        GatePolicy.ALWAYS, true,
         List.of(HouseholdGroups.ADMIN, HouseholdGroups.MEMBER));
 
     public enum GatePolicy {
@@ -64,29 +65,17 @@ public enum HouseholdActionType {
         NEVER             // always autonomous
     }
 
-    /**
-     * Maps AMOUNT_THRESHOLD types to their threshold config category.
-     * Null for ALWAYS and NEVER types — no threshold applies.
-     */
-    public enum ThresholdCategory { SPEND, BOOKING, CONTRACTOR }
-
     private final GatePolicy gatePolicy;
-    private final ThresholdCategory thresholdCategory;
     private final boolean reversible;
     private final List<String> candidateGroups;
 
-    HouseholdActionType(GatePolicy gatePolicy, ThresholdCategory thresholdCategory,
-                        boolean reversible, List<String> candidateGroups) {
+    HouseholdActionType(GatePolicy gatePolicy, boolean reversible, List<String> candidateGroups) {
         this.gatePolicy = gatePolicy;
-        this.thresholdCategory = thresholdCategory;
         this.reversible = reversible;
         this.candidateGroups = List.copyOf(candidateGroups);
     }
 
     public GatePolicy gatePolicy() { return gatePolicy; }
-
-    /** Null for ALWAYS and NEVER types. */
-    public ThresholdCategory thresholdCategory() { return thresholdCategory; }
 
     public boolean reversible() { return reversible; }
 
