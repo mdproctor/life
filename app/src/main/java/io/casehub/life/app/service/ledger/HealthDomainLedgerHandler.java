@@ -52,7 +52,7 @@ public class HealthDomainLedgerHandler implements DomainLedgerHandler {
 
         HealthDecisionLedgerEntry entry = new HealthDecisionLedgerEntry();
         entry.subjectId      = ctx.workItemId;
-        entry.sequenceNumber = nextSequenceNumber(ctx.workItemId);
+        entry.sequenceNumber = DomainLedgerHandler.nextSequenceNumber(ledgerRepository, ctx.workItemId);
         entry.entryType      = LedgerEntryType.EVENT;
         entry.actorId        = actorId;
         entry.actorType      = actorType;
@@ -72,9 +72,4 @@ public class HealthDomainLedgerHandler implements DomainLedgerHandler {
         return LifeTaskContext.findByIdOptional(workItemId);
     }
 
-    private int nextSequenceNumber(UUID subjectId) {
-        return ledgerRepository.findLatestBySubjectId(subjectId)
-                .map(e -> e.sequenceNumber + 1)
-                .orElse(1);
-    }
 }

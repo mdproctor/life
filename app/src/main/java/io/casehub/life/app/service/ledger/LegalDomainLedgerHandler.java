@@ -24,6 +24,7 @@ public class LegalDomainLedgerHandler implements DomainLedgerHandler {
     @Inject LedgerEntryRepository ledgerRepository;
     @Inject LifeOutcomeAttestationWriter attestationWriter;
 
+    // Package-visible constructor for testing with injected deps
     LegalDomainLedgerHandler(LedgerEntryRepository ledgerRepository,
                               LifeOutcomeAttestationWriter attestationWriter) {
         this.ledgerRepository = ledgerRepository;
@@ -49,7 +50,7 @@ public class LegalDomainLedgerHandler implements DomainLedgerHandler {
 
         LegalActionLedgerEntry entry = new LegalActionLedgerEntry();
         entry.subjectId      = ctx.workItemId;
-        entry.sequenceNumber = nextSequenceNumber(ctx.workItemId);
+        entry.sequenceNumber = DomainLedgerHandler.nextSequenceNumber(ledgerRepository, ctx.workItemId);
         entry.entryType      = LedgerEntryType.EVENT;
         entry.actorId        = actorId;
         entry.actorType      = actorType;
@@ -68,9 +69,4 @@ public class LegalDomainLedgerHandler implements DomainLedgerHandler {
         return LifeTaskContext.findByIdOptional(workItemId);
     }
 
-    private int nextSequenceNumber(UUID subjectId) {
-        return ledgerRepository.findLatestBySubjectId(subjectId)
-                .map(e -> e.sequenceNumber + 1)
-                .orElse(1);
-    }
 }

@@ -19,6 +19,7 @@ public class FinanceDomainLedgerHandler implements DomainLedgerHandler {
 
     @Inject LedgerEntryRepository ledgerRepository;
 
+    // Package-visible constructor for testing with injected deps
     FinanceDomainLedgerHandler(LedgerEntryRepository ledgerRepository) {
         this.ledgerRepository = ledgerRepository;
     }
@@ -41,9 +42,11 @@ public class FinanceDomainLedgerHandler implements DomainLedgerHandler {
     }
 
     private void writeFromRecord(LifeDecisionEventType event, LifeCommitmentRecord record, UUID workItemId) {
+        // workItemId from record may be null for OVERSIGHT commitments before the gate is fulfilled —
+        // this is expected; the CREATED entry records the gate opening, not task completion.
         FinancialDecisionLedgerEntry entry = new FinancialDecisionLedgerEntry();
         entry.subjectId        = record.id;
-        entry.sequenceNumber   = nextSequenceNumber(record.id);
+        entry.sequenceNumber   = DomainLedgerHandler.nextSequenceNumber(ledgerRepository, record.id);
         entry.entryType        = LedgerEntryType.EVENT;
         entry.actorId          = "life-system";
         entry.actorType        = ActorType.SYSTEM;
@@ -59,11 +62,5 @@ public class FinanceDomainLedgerHandler implements DomainLedgerHandler {
 
     protected Optional<LifeCommitmentRecord> findRecord(UUID workItemId) {
         return LifeCommitmentRecord.findByWorkItemId(workItemId);
-    }
-
-    private int nextSequenceNumber(UUID subjectId) {
-        return ledgerRepository.findLatestBySubjectId(subjectId)
-                .map(e -> e.sequenceNumber + 1)
-                .orElse(1);
     }
 }

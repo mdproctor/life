@@ -68,6 +68,46 @@ class FinanceDomainLedgerHandlerTest {
         ArgumentCaptor<LedgerEntry> captor = ArgumentCaptor.forClass(LedgerEntry.class);
         verify(ledgerRepository).save(captor.capture());
         assertInstanceOf(FinancialDecisionLedgerEntry.class, captor.getValue());
+        FinancialDecisionLedgerEntry entry = (FinancialDecisionLedgerEntry) captor.getValue();
+        assertEquals(LifeDecisionEventType.SLA_BREACH, entry.eventType);
+        assertEquals(BigDecimal.valueOf(500), entry.amountThreshold);
+        assertEquals(record.id, entry.oversightRef);
+    }
+
+    @Test void writeEntry_task_completed_setsApprovedBy() {
+        UUID taskId = UUID.randomUUID();
+        UUID approver = UUID.randomUUID();
+        LifeCommitmentRecord record = new LifeCommitmentRecord();
+        record.id = UUID.randomUUID();
+        record.approvedBy = approver.toString();
+
+        handler = new FinanceDomainLedgerHandler(ledgerRepository) {
+            @Override protected Optional<LifeCommitmentRecord> findRecord(UUID id) {
+                return Optional.of(record);
+            }
+        };
+
+        when(ledgerRepository.findLatestBySubjectId(any())).thenReturn(Optional.empty());
+        when(ledgerRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        handler.writeEntry(LifeDecisionEventType.COMPLETED, taskId, new WorkItem());
+
+        ArgumentCaptor<LedgerEntry> captor = ArgumentCaptor.forClass(LedgerEntry.class);
+        verify(ledgerRepository).save(captor.capture());
+        FinancialDecisionLedgerEntry entry = (FinancialDecisionLedgerEntry) captor.getValue();
+        assertEquals(approver.toString(), entry.approvedBy);
+        assertEquals(LifeDecisionEventType.COMPLETED, entry.eventType);
+    }
+
+    @Test void writeEntry_task_noRecord_isNoOp() {
+        handler = new FinanceDomainLedgerHandler(ledgerRepository) {
+            @Override protected Optional<LifeCommitmentRecord> findRecord(UUID id) {
+                return Optional.empty();
+            }
+        };
+
+        handler.writeEntry(LifeDecisionEventType.SLA_BREACH, UUID.randomUUID(), new WorkItem());
+        verify(ledgerRepository, never()).save(any());
     }
 
     @Test void writeEntry_commitment_created_savesEntry() {
