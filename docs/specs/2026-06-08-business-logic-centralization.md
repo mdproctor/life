@@ -156,7 +156,7 @@ HOUSEHOLD and FAMILY_SCHEDULING have `OptionalDouble.empty()` for `borderlineMar
 | Was | Becomes |
 |---|---|
 | `LifeOutcomeAttestationWriter.DOMAIN_TO_CAPABILITY` static map (ctx.domain path) | `ctx.domain.descriptor().capability()` |
-| `LifeOutcomeAttestationWriter` scope-parse fallback: `DOMAIN_TO_CAPABILITY.get(domain)` | `LifeDomain.valueOf(segments[2].toUpperCase()).descriptor().capability()` |
+| `LifeOutcomeAttestationWriter` scope-parse fallback: `DOMAIN_TO_CAPABILITY.get(domain)` | `LifeDomain.valueOf(segments[2].toUpperCase()).descriptor().capability()` — defensive only; `domain` is `@Column(nullable = false)` so this path does not fire in practice |
 | `LifeTrustRoutingPolicyProvider.CAPABILITY_TO_DOMAIN` (32 entries) | `@PostConstruct` capability index derived from descriptors — see §Trust Routing below |
 | `LifeTrustRoutingPolicyProvider.POLICIES` (8 entries) | `domain.descriptor().routingPolicy()` |
 | `LifeTaskService.domainFromCategory()` switch | `LifeDomain.fromCategory(category)` |
@@ -289,7 +289,7 @@ handlers.stream()
 
 HEALTH and LEGAL handlers write on CREATED. FINANCE handler returns immediately for CREATED (its CREATED write goes through `OversightGateStrategy`). HOUSEHOLD/FAMILY_SCHEDULING have no handler — nothing is written.
 
-**`LifeOutcomeAttestationWriter.resolveCapabilityTag()`** — both lookup paths use the descriptor. Path 1 (ctx.domain present): `ctx.domain.descriptor().capability()`. Path 2 (scope-parse fallback, the only production path that fires for LEGAL and ELDER_CARE tasks whose `LifeTaskContext.domain` is null): `LifeDomain.valueOf(segments[2].toUpperCase()).descriptor().capability()`. `DOMAIN_TO_CAPABILITY` is fully removed; neither path references it.
+**`LifeOutcomeAttestationWriter.resolveCapabilityTag()`** — both lookup paths use the descriptor. Path 1 (ctx.domain present): `ctx.domain.descriptor().capability()`. Path 2 (scope-parse fallback): `LifeDomain.valueOf(segments[2].toUpperCase()).descriptor().capability()`. `DOMAIN_TO_CAPABILITY` is fully removed; neither path references it. Note: Path 2 is a defensive measure only — `LifeTaskContext.domain` is `@Column(nullable = false)`, so ctx.domain cannot be null in normal operation after this refactor. The scope-parse fallback does not fire in practice.
 
 **`LifeLedgerWriter`** — shrinks to `writeErasureEntry()` (GDPR) + `populateBase()` helper for handlers. Methods `writeHealthEntry`, `writeFinancialEntry`, `writeLegalEntry` removed.
 
@@ -382,10 +382,11 @@ public interface LifeCommitmentStrategy {
 Each of the three existing strategies implements both new methods directly — each already knows its mode and its escalation message. `LifeWatchdogAlertObserver` removes the switch and uses:
 
 ```java
-strategies.stream()
+String title = strategies.stream()
     .filter(s -> s.commitmentMode() == record.mode)
     .findFirst()
-    .ifPresent(s -> title = s.escalationTitle(record));
+    .map(s -> s.escalationTitle(record))
+    .orElse("Commitment expired — action required");
 ```
 
 `commitmentMode()` is a mode identity declaration for lookup purposes, distinct from `applies(CommitmentContext)` which tests execution eligibility against a reconstituted context. Both serve different callers.
@@ -572,7 +573,7 @@ app/
 
 ### Handler tests (Mockito, `app/service/ledger/`)
 - Mock `LedgerEntryRepository` + dependencies
-- `HealthDomainLedgerHandler`, `LegalDomainLedgerHandler`: verify correct `LedgerEntry` subclass constructed, fields set, attestation triggered
+- `HealthDomainLedgerHandler`, `LegalDomainLedgerHandler`: verify correct `LedgerEntry` subclass constructed, fields set, attestation triggered; verify null-context guard — when `LifeTaskContext.findByIdOptional()` returns empty, handler returns early with no repository call and emits a warning log
 - `FinanceDomainLedgerHandler`: verify WorkItem-based overload writes on SLA_BREACH/COMPLETED; verify no-op on CREATED (WorkItem-based); verify commitment-based overload writes correctly for oversight CREATED (via `OversightGateStrategy` path) and OVERSIGHT SLA_BREACH (via `LifeWatchdogAlertObserver` path)
 - Do not assert on `entry.id` or `entry.occurredAt` — set by `@PrePersist`, bypassed in Mockito tests
 
