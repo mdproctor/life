@@ -1,4 +1,4 @@
-package io.casehub.life.app.routing;
+package io.casehub.life.api;
 
 import java.util.Objects;
 import java.util.Optional;

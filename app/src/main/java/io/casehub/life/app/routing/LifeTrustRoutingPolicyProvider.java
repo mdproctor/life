@@ -3,6 +3,7 @@ package io.casehub.life.app.routing;
 import io.casehub.api.spi.routing.TrustRoutingPolicy;
 import io.casehub.api.spi.routing.TrustRoutingPolicyProvider;
 import io.casehub.life.api.LifeCapabilities;
+import io.casehub.life.api.LifeRoutingPolicy;
 import io.casehub.platform.api.preferences.PreferenceKey;
 import io.casehub.platform.api.preferences.PreferenceProvider;
 import io.casehub.platform.api.preferences.Preferences;
