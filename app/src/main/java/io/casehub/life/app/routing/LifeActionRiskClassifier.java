@@ -57,15 +57,22 @@ public class LifeActionRiskClassifier implements ActionRiskClassifier {
             return new RiskDecision.Autonomous();
         }
         Preferences prefs = preferenceProvider.resolve(RISK_POLICY_SCOPE);
-        double threshold = resolveThreshold(type.thresholdCategory(), prefs);
+        double threshold = resolveThreshold(type, prefs);
         return amount >= threshold ? buildGate(type, action, prefs) : new RiskDecision.Autonomous();
     }
 
-    private double resolveThreshold(HouseholdActionType.ThresholdCategory category, Preferences prefs) {
-        return switch (category) {
-            case SPEND      -> prefs.get(LifeRiskPolicyKeys.SPEND_THRESHOLD).value();
-            case BOOKING    -> prefs.get(LifeRiskPolicyKeys.BOOKING_THRESHOLD).value();
-            case CONTRACTOR -> prefs.get(LifeRiskPolicyKeys.CONTRACTOR_THRESHOLD).value();
+    // ThresholdCategory removed from HouseholdActionType in #27 — switch directly on type.
+    // This method is interim: replaced by per-type HouseholdRiskRule implementations in Plan B.
+    private double resolveThreshold(HouseholdActionType type, Preferences prefs) {
+        return switch (type) {
+            case SPEND_PURCHASE, SPEND_SUBSCRIPTION_MODIFY ->
+                prefs.get(LifeRiskPolicyKeys.SPEND_THRESHOLD).value();
+            case BOOKING_REFUNDABLE ->
+                prefs.get(LifeRiskPolicyKeys.BOOKING_THRESHOLD).value();
+            case CONTRACTOR_ENGAGE ->
+                prefs.get(LifeRiskPolicyKeys.CONTRACTOR_THRESHOLD).value();
+            default -> throw new IllegalStateException(
+                "resolveThreshold called for non-AMOUNT_THRESHOLD type: " + type);
         };
     }
 
