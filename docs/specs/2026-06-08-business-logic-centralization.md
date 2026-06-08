@@ -21,7 +21,7 @@ Business logic in casehub-life is organized by concern (ledger, routing, attesta
 | `LifeWatchdogAlertObserver` | `CommitmentMode` → escalation title switch |
 | `LifeSlaBreachPolicy` | Hardcoded 48h / household-admin for all domains |
 | `LifeCaseService.resolve()` | Case type switch over injected CaseHub beans |
-| `*CaseHub` worker methods | Worker lambdas buried in CDI beans alongside YAML augmentation |
+| `*CaseDefinitions` + `*CaseHub` pairs | 16 classes for 8 case definitions |
 
 **Cost:** Adding a new domain requires touching 4–6 files with no compiler enforcement between them. A missed update (e.g. forgetting `DOMAIN_TO_CAPABILITY`) silently degrades behaviour.
 
@@ -35,21 +35,23 @@ Two layers, applied consistently:
 
 ### Layer 1 — Descriptor (POJO)
 
-Pure Java, no framework imports, zero injected dependencies. Carries all **declarative knowledge** about a domain or type — everything you need to know about it without running any code. Lives in `api/` (domain descriptors) or `app/` (case descriptors, risk rules — these reference engine-api types and cannot be in api/). Testable with plain `new` and plain JUnit.
+Pure Java, no framework imports, zero injected dependencies. Carries all **declarative knowledge** about a domain or type — everything you need to know about it without running any code. Lives in `api/` (domain descriptors) or `app/` (action type rules, case workers). Testable with plain `new` and plain JUnit.
 
-### Layer 2 — Handler or CDI shell (CDI supplement, optional)
+### Layer 2 — Handler (CDI supplement, optional)
 
-`@ApplicationScoped` CDI bean. Adds **execution behaviour** using infrastructure (repositories, preference providers). Discovered via `Instance<HandlerType>` or `Instance<BaseClass>` at the service layer. Optional: if a domain has no handler for a given concern, the service falls back gracefully via `ifPresent()`. Testable with Mockito.
+`@ApplicationScoped` CDI bean. Adds **execution behaviour** using infrastructure (repositories, preference providers). Discovered via `Instance<HandlerType>` at the service layer. Optional: if a domain has no handler for a given concern, the service falls back gracefully. Testable with Mockito.
 
 The dispatcher pattern (`Instance<T>` filtered by type identity) replaces every switch statement. No registration step. No dispatcher modification when adding a new type.
 
+**Case hub variant:** `LifeTypedCaseHub` (abstract class) acts as the CDI lifecycle boundary. It owns `getDefinition()` (final, cached) and delegates worker construction to a descriptor POJO. YAML provides the case structure; the descriptor provides the workers. See §Case Hub Descriptors.
+
 ---
 
-## Design 1: Domain Descriptors (`LifeDomain`)
+## Design: Domain Descriptors (`LifeDomain`)
 
 ### `LifeSlaPolicy` record — `api/`
 
-Pure Java (no casehub-work-api dep). Carries the SLA escalation inputs; `LifeSlaBreachPolicy` in `app/` constructs the `BreachDecision` from these values. The two-tier detection logic (is `escalationGroup` already in `candidateGroups`?) stays in `LifeSlaBreachPolicy` where it belongs.
+Pure Java (no casehub-work-api dep). Carries the SLA escalation inputs; `LifeSlaBreachPolicy` in `app/` constructs the `BreachDecision` from these values.
 
 ```java
 public record LifeSlaPolicy(String escalationGroup, Duration escalationDeadline) {}
@@ -59,17 +61,17 @@ public record LifeSlaPolicy(String escalationGroup, Duration escalationDeadline)
 
 ```java
 public interface LifeDomainDescriptor {
-    String capability();             // maps to LifeCapabilities constant
-    String templateCategory();       // "health", "contractor", etc. — reverse of domainFromCategory()
-    LifeRoutingPolicy routingPolicy(); // trust threshold, minObservations, margin, fallback
+    String capability();              // maps to LifeCapabilities constants
+    String templateCategory();        // "health", "contractor", etc. — reverse of domainFromCategory()
+    LifeRoutingPolicy routingPolicy();// trust threshold, minObservations, margin, fallback
     Set<String> workerCapabilities(); // fine-grained worker names routing to this domain
-    LifeSlaPolicy slaPolicy();       // escalation group + deadline; LifeSlaBreachPolicy builds BreachDecision
+    LifeSlaPolicy slaPolicy();        // escalation group + deadline; LifeSlaBreachPolicy builds BreachDecision
 }
 ```
 
-Note: `producesLedgerEntry()` is intentionally absent. The presence or absence of a `DomainLedgerHandler` bean is the canonical signal — having a flag that duplicates this introduces a false abstraction (FINANCE has a handler but uses `LifeCommitmentRecord`, not `LifeTaskContext`; the handler abstracts that entirely). Handler presence = ledger written.
+`LifeRoutingPolicy` moves from `app/routing/` to `api/` — it is domain vocabulary, not app implementation. Its record signature is unchanged: `(OptionalDouble threshold, OptionalInt minimumObservations, OptionalDouble borderlineMargin, Optional<String> fallbackType, String rationale)`.
 
-### `LifeDomain` enum — gains `descriptor()` and `fromCategory()`
+### `LifeDomain` enum — gains `descriptor()`
 
 ```java
 public enum LifeDomain {
@@ -87,7 +89,7 @@ public enum LifeDomain {
     public LifeDomainDescriptor descriptor() { return descriptor; }
 
     public static Optional<LifeDomain> fromCategory(String category) {
-        if (category == null) return Optional.of(HOUSEHOLD);
+        if (category == null) return Optional.empty();
         return Arrays.stream(values())
             .filter(d -> d.descriptor().templateCategory().equals(category))
             .findFirst();
@@ -97,7 +99,7 @@ public enum LifeDomain {
 
 ### Eight descriptor POJOs — `api/descriptor/`
 
-One per domain. All pure Java — `LifeRoutingPolicy`, `LifeSlaPolicy`, `Set<String>`, `String` only. Example:
+One per domain. Example — domain with all routing fields present (HEALTH):
 
 ```java
 public final class HealthDomainDescriptor implements LifeDomainDescriptor {
@@ -109,7 +111,9 @@ public final class HealthDomainDescriptor implements LifeDomainDescriptor {
     }
     public LifeRoutingPolicy routingPolicy() {
         return new LifeRoutingPolicy(
-            OptionalDouble.of(0.75), OptionalInt.of(10), OptionalDouble.of(0.05),
+            OptionalDouble.of(0.75),
+            OptionalInt.of(10),
+            OptionalDouble.of(0.05),
             Optional.of("household-admin"),
             "High reliability required for health appointments and follow-ups");
     }
@@ -119,121 +123,167 @@ public final class HealthDomainDescriptor implements LifeDomainDescriptor {
 }
 ```
 
-HOUSEHOLD and FAMILY_SCHEDULING use `OptionalDouble.empty()` and `OptionalInt.empty()` for threshold and margin — these domains have no trust threshold configured:
+Example — domain with absent margin and no fallback (HOUSEHOLD):
 
 ```java
-public LifeRoutingPolicy routingPolicy() {
-    return new LifeRoutingPolicy(
-        OptionalDouble.of(0.50), OptionalInt.of(5), OptionalDouble.empty(),
-        Optional.empty(),
-        "Routine household tasks tolerate lower threshold, no escalation");
+public final class HouseholdDomainDescriptor implements LifeDomainDescriptor {
+    public String capability()       { return LifeCapabilities.HOUSEHOLD_MANAGEMENT; }
+    public String templateCategory() { return "household"; }
+    public Set<String> workerCapabilities() {
+        return Set.of("schedule-inspection", "get-quotes", "issue-commitment",
+                      "monitor-job", "record-completion");
+    }
+    public LifeRoutingPolicy routingPolicy() {
+        return new LifeRoutingPolicy(
+            OptionalDouble.of(0.50),
+            OptionalInt.of(5),
+            OptionalDouble.empty(),
+            Optional.empty(),
+            "Routine household tasks tolerate lower threshold, no escalation");
+    }
+    public LifeSlaPolicy slaPolicy() {
+        return new LifeSlaPolicy("household-admin", Duration.ofHours(48));
+    }
 }
 ```
 
-### `LifeRoutingPolicy` — moves from `app/routing/` to `api/`
-
-Unchanged record signature (`OptionalDouble`, `OptionalInt`, `Optional<String>`, `String`). Package change only. All callers update imports.
+HOUSEHOLD and FAMILY_SCHEDULING have `OptionalDouble.empty()` for `borderlineMargin` and `Optional.empty()` for `fallbackType` — these are the only two domains without a fallback escalation path.
 
 ### What this eliminates
 
 | Was | Becomes |
 |---|---|
 | `LifeOutcomeAttestationWriter.DOMAIN_TO_CAPABILITY` static map | `domain.descriptor().capability()` |
-| `LifeTrustRoutingPolicyProvider.CAPABILITY_TO_DOMAIN` (32 entries) | `@PostConstruct`-built `Map<String, LifeDomain>` derived from all `descriptor().workerCapabilities()` |
+| `LifeTrustRoutingPolicyProvider.CAPABILITY_TO_DOMAIN` (32 entries) | `@PostConstruct` capability index derived from descriptors — see §Trust Routing below |
 | `LifeTrustRoutingPolicyProvider.POLICIES` (8 entries) | `domain.descriptor().routingPolicy()` |
 | `LifeTaskService.domainFromCategory()` switch | `LifeDomain.fromCategory(category)` |
 | `LifeSlaBreachPolicy` universal 48h/household-admin | `domain.descriptor().slaPolicy()` |
 
-### `LifeTrustRoutingPolicyProvider` — capability index
+### Trust routing — capability index
 
-`forCapability()` is called on every worker execution during case runs. Replacing the O(1) HashMap lookup with a stream scan would be an O(n×m) regression. Instead, build the reverse index at startup:
+`LifeTrustRoutingPolicyProvider` builds a reverse `Map<String, LifeDomain>` at startup instead of the static `CAPABILITY_TO_DOMAIN` map. O(1) lookup is preserved:
 
 ```java
-private Map<String, LifeDomain> capabilityIndex;
-
 @PostConstruct
 void buildCapabilityIndex() {
     Map<String, LifeDomain> index = new HashMap<>();
     for (LifeDomain domain : LifeDomain.values()) {
-        // fine-grained worker capabilities
-        domain.descriptor().workerCapabilities().forEach(cap -> index.put(cap, domain));
-        // coarse-grained self-map (for direct capability name lookups)
-        index.put(domain.descriptor().capability(), domain);
+        for (String cap : domain.descriptor().workerCapabilities()) {
+            index.put(cap, domain);
+        }
     }
     this.capabilityIndex = Map.copyOf(index);
 }
+
+@Override
+public TrustRoutingPolicy forCapability(String capabilityName) {
+    LifeDomain domain = capabilityIndex.get(capabilityName);
+    if (domain == null) return TrustRoutingPolicy.DEFAULT;
+
+    LifeRoutingPolicy base = domain.descriptor().routingPolicy();
+    // Scope key uses capability() — same string as old POLICIES map key.
+    // trust-routing.yaml keys are unchanged: "health-coordination", "legal-deadline", etc.
+    SettingsScope scope = SettingsScope.of("casehubio", "life", "trust-routing",
+        domain.descriptor().capability());
+    Preferences prefs = preferenceProvider.resolve(scope);
+    // ... build TrustRoutingPolicy from base + YAML overlays (blend factor, quality floors)
+}
 ```
 
-O(1) lookup preserved. The map is derived from descriptors rather than declared.
-
-**YAML scope keys are unchanged.** The current code derives the YAML settings scope key from the coarse-grained capability string (e.g. `"health-coordination"`). After the refactor, `domain.descriptor().capability()` returns the identical strings — `LifeCapabilities.HEALTH_COORDINATION` etc. Trust-routing YAML files require no changes.
+`domain.descriptor().capability()` returns the same coarse-grained strings the old `POLICIES` map used as keys (`LifeCapabilities.HEALTH_COORDINATION`, etc.), so `trust-routing.yaml` requires no changes.
 
 ---
 
-## Design 2: Domain Ledger Handlers
+## Design: Domain Ledger Handlers
 
 ### `DomainLedgerHandler` interface — `app/service/ledger/`
 
 ```java
 public interface DomainLedgerHandler {
     LifeDomain domain();
+    // WorkItem-based write: used by LifeDecisionLedgerObserver and LifeTaskService (CREATED)
     void writeEntry(LifeDecisionEventType event, UUID workItemId, WorkItem workItem);
+    // Commitment-based write: default no-op; only FinanceDomainLedgerHandler implements
+    default void writeEntry(LifeDecisionEventType event, LifeCommitmentRecord record) { }
 }
 ```
 
-Covers all three event types: `CREATED`, `SLA_BREACH`, `COMPLETED`. Each handler fetches its own context internally, eliminating the double-fetch currently in `LifeDecisionLedgerObserver` (which calls `LifeTaskContext.findByIdOptional` in `resolveDomain()` and then again inside the switch branch).
+The commitment-based overload exists because FINANCE CREATED entries are generated by `OversightGateStrategy` at commitment time — before a WorkItem exists. No other domain needs this overload.
 
-### Three CDI implementations
+### Four CDI implementations
 
-- `HealthDomainLedgerHandler` — fetches `LifeTaskContext` → builds `HealthDecisionLedgerEntry` + attestation. Handles all three event types.
-- `LegalDomainLedgerHandler` — fetches `LifeTaskContext` → builds `LegalActionLedgerEntry` + attestation. Handles all three event types.
-- `FinanceDomainLedgerHandler` — fetches `LifeCommitmentRecord` → builds `FinancialDecisionLedgerEntry`. **Returns early on `CREATED` event** — finance entries are written only when a commitment record exists (created by the commitment strategy, not by task creation).
+- `HealthDomainLedgerHandler` — fetches `LifeTaskContext` internally; writes `HealthDecisionLedgerEntry` + attestation; active for CREATED, SLA_BREACH, COMPLETED. Eliminates double-fetch: observer no longer fetches `LifeTaskContext` separately before calling the writer — the handler fetches it once.
+- `LegalDomainLedgerHandler` — same structure as HEALTH; writes `LegalActionLedgerEntry` + attestation.
+- `FinanceDomainLedgerHandler` — implements both overloads:
+  - `writeEntry(event, workItemId, workItem)` (WorkItem-based): used by observer for SLA_BREACH and COMPLETED. Returns immediately if no `LifeCommitmentRecord` found for the workItemId. Returns immediately for CREATED event — FINANCE task CREATED writes are commitment-initiated, not task-initiated.
+  - `writeEntry(event, record)` (commitment-based): used by `OversightGateStrategy` for FINANCE CREATED. Takes the `LifeCommitmentRecord` directly (workItemId is null at oversight gate creation time).
 
-### CREATED event path in `LifeTaskService`
+HOUSEHOLD and FAMILY_SCHEDULING have no handler — no ledger entries are written for these domains. Handler absence is the canonical signal; no flag on the descriptor is needed.
 
-`LifeTaskService` currently writes CREATED entries for HEALTH and LEGAL directly (lines 95–98). After refactor, `LifeTaskService` injects `Instance<DomainLedgerHandler>` and dispatches through it for CREATED events — the same pattern as `LifeDecisionLedgerObserver`:
+### `OversightGateStrategy` migration
+
+`OversightGateStrategy` currently injects `LifeLedgerWriter` to call `writeFinancialEntry(CREATED, record, null)` after persisting the oversight commitment record. After this refactor, `LifeLedgerWriter.writeFinancialEntry()` is removed. `OversightGateStrategy` instead injects `Instance<DomainLedgerHandler>` and calls the commitment-based overload:
 
 ```java
-@Inject Instance<DomainLedgerHandler> ledgerHandlers;
+handlers.stream()
+    .filter(h -> h.domain() == LifeDomain.FINANCE)
+    .findFirst()
+    .ifPresent(h -> h.writeEntry(LifeDecisionEventType.CREATED, record));
+```
 
-// After WorkItem and LifeTaskContext are persisted:
-LifeDomain domain = LifeDomain.fromCategory(template.category).orElse(LifeDomain.HOUSEHOLD);
-ledgerHandlers.stream()
+`LifeLedgerWriter` is no longer injected in `OversightGateStrategy`.
+
+### `LifeWatchdogAlertObserver` migration
+
+`LifeWatchdogAlertObserver` currently injects `LifeLedgerWriter` to call `writeFinancialEntry(SLA_BREACH, record, null)` for OVERSIGHT records that expire without a response. After the refactor, the observer injects `Instance<DomainLedgerHandler>` and calls the commitment-based overload:
+
+```java
+if (record.mode == CommitmentMode.OVERSIGHT) {
+    handlers.stream()
+        .filter(h -> h.domain() == LifeDomain.FINANCE)
+        .findFirst()
+        .ifPresent(h -> h.writeEntry(LifeDecisionEventType.SLA_BREACH, record));
+}
+```
+
+`LifeLedgerWriter` is no longer injected in `LifeWatchdogAlertObserver`. The escalation task title comes from `LifeCommitmentStrategy.escalationTitle(record)` (see §Commitment Mode Escalation).
+
+### Services after refactor
+
+**`LifeDecisionLedgerObserver`** — no switch; delegates to handler. Double-fetch eliminated: the observer no longer fetches `LifeTaskContext` before calling the handler — each handler fetches its own context exactly once:
+
+```java
+handlers.stream()
+    .filter(h -> h.domain() == domain)
+    .findFirst()
+    .ifPresent(h -> h.writeEntry(event, workItemId, workItem));
+```
+
+**`LifeTaskService`** — `domainFromCategory()` switch removed; injects `Instance<DomainLedgerHandler>` instead of `LifeLedgerWriter`. CREATED dispatch:
+
+```java
+handlers.stream()
     .filter(h -> h.domain() == domain)
     .findFirst()
     .ifPresent(h -> h.writeEntry(LifeDecisionEventType.CREATED, workItem.id, workItem));
 ```
 
-Domains with no handler (HOUSEHOLD, FAMILY_SCHEDULING, TRAVEL, etc.) silently produce no CREATED entry — the same as today.
+HEALTH and LEGAL handlers write on CREATED. FINANCE handler returns immediately for CREATED (its CREATED write goes through `OversightGateStrategy`). HOUSEHOLD/FAMILY_SCHEDULING have no handler — nothing is written.
 
-### `LifeDecisionLedgerObserver` after refactor
+**`LifeLedgerWriter`** — shrinks to `writeErasureEntry()` (GDPR) + `populateBase()` helper for handlers. Methods `writeHealthEntry`, `writeFinancialEntry`, `writeLegalEntry` removed.
 
-No switch. Shared resolution + handler dispatch:
-
+**`LifeSlaBreachPolicy`** — becomes thin dispatcher:
 ```java
-@Inject Instance<DomainLedgerHandler> handlers;
-
-private void resolveAndWrite(UUID workItemId, LifeDecisionEventType eventType) {
-    WorkItem workItem = WorkItem.findByIdOptional(workItemId).orElse(null);
-    if (workItem == null) return;
-    LifeDomain domain = resolveDomain(workItemId, workItem);
-    if (domain == null) return;
-    handlers.stream()
-        .filter(h -> h.domain() == domain)
-        .findFirst()
-        .ifPresent(h -> h.writeEntry(eventType, workItemId, workItem));
-}
+LifeDomain domain = LifeDomain.fromCategory(ctx.task().category()).orElse(LifeDomain.HOUSEHOLD);
+LifeSlaPolicy policy = domain.descriptor().slaPolicy();
+if (ctx.task().candidateGroups().contains(policy.escalationGroup()))
+    return new BreachDecision.Fail("life-sla-exhausted");
+return BreachDecision.EscalateTo.to(policy.escalationGroup()).withDeadline(policy.escalationDeadline());
 ```
-
-### `LifeLedgerWriter` after refactor
-
-Loses all three domain-specific write methods. Becomes a shared utility with:
-- `writeErasureEntry(ExternalActor, String)` — GDPR erasure, no domain dispatch
-- `populateBase(LedgerEntry, UUID, String, ActorType, String)` — shared field population used by handlers
 
 ---
 
-## Design 3: Action Type Rules (`HouseholdActionType`)
+## Design: Action Type Rules (`HouseholdActionType`)
 
 ### `HouseholdRiskRule` interface — `app/routing/`
 
@@ -246,7 +296,7 @@ public interface HouseholdRiskRule {
 
 ### Eleven POJO rule implementations — `app/routing/rules/`
 
-One per `HouseholdActionType` constant. Pure functions: `(PlannedAction, Preferences) → RiskDecision`. No injected dependencies. The dispatcher resolves `Preferences` once and passes it in.
+One per `HouseholdActionType` constant. Pure functions: `(PlannedAction, Preferences) → RiskDecision`. No injected deps. The dispatcher resolves `Preferences` once and passes it in.
 
 `ThresholdCategory` removed from `HouseholdActionType` — it was always a classifier implementation detail. Each `AMOUNT_THRESHOLD` rule references its preference key directly.
 
@@ -258,151 +308,124 @@ public final class SpendPurchaseRule implements HouseholdRiskRule {
         double amount = parseAmount(action.context());
         if (amount < prefs.get(LifeRiskPolicyKeys.SPEND_THRESHOLD).value())
             return new RiskDecision.Autonomous();
-        return new RiskDecision.GateRequired(
-            "Spend of " + formatAmount(action.context()) + " requires household approval",
-            SPEND_PURCHASE.reversible(), SPEND_PURCHASE.candidateGroups(),
-            Duration.ofHours((long) prefs.get(LifeRiskPolicyKeys.APPROVAL_EXPIRES_HOURS).value()),
-            "casehubio/life/oversight");
+        return gate(SPEND_PURCHASE, action, prefs,
+            "Spend of " + formatAmount(action.context()) + " requires household approval");
     }
 }
 ```
 
-### `LifeActionRiskClassifier` — thin dispatcher with startup validation
+### `LifeActionRiskClassifier` — thin dispatcher
 
-Builds `Map<HouseholdActionType, HouseholdRiskRule>` at construction from `Instance<HouseholdRiskRule>`. **Startup validation:** throws `IllegalStateException` if any `HouseholdActionType` value has no registered rule — missing rules fail fast rather than silently returning `Autonomous`.
+Builds `Map<HouseholdActionType, HouseholdRiskRule>` at startup via `Instance<HouseholdRiskRule>`. **Startup validation:** throws `IllegalStateException` if any `HouseholdActionType` value has no registered rule — makes missing rules immediately visible rather than silently returning `Autonomous`.
 
 ---
 
-## Design 4: Commitment Mode Escalation
+## Design: Commitment Mode Escalation
 
-### `LifeCommitmentStrategy` gains two methods
+### `LifeCommitmentStrategy` gains `escalationTitle()` and `commitmentMode()`
 
 ```java
 public interface LifeCommitmentStrategy {
     boolean applies(CommitmentContext context);
     CommitmentOutcome execute(CommitmentContext context);
-    CommitmentMode commitmentMode();              // new — identifies which mode this strategy owns
-    String escalationTitle(LifeCommitmentRecord record); // new — all three impls provide this
+    String escalationTitle(LifeCommitmentRecord record);  // new — mode-specific message
+    CommitmentMode commitmentMode();                       // new — mode identity for observer lookup
 }
 ```
 
-`commitmentMode()` returns the `CommitmentMode` enum constant this strategy handles. The observer uses it for a type-safe lookup:
+Each of the three existing strategies implements both new methods directly — each already knows its mode and its escalation message. `LifeWatchdogAlertObserver` removes the switch and uses:
 
 ```java
 strategies.stream()
     .filter(s -> s.commitmentMode() == record.mode)
     .findFirst()
-    .map(s -> s.escalationTitle(record))
-    .orElse("Commitment expired — action required");
+    .ifPresent(s -> title = s.escalationTitle(record));
 ```
 
-Both new methods are abstract. All three existing implementations (`DelegationCommitmentStrategy`, `ContractorCommitmentStrategy`, `OversightGateStrategy`) implement them directly — each already encodes its mode and knows its escalation message. The switch in `LifeWatchdogAlertObserver.createEscalationTask()` is removed.
-
-### `LifeSlaBreachPolicy` — thin dispatcher
-
-```java
-LifeDomain domain = LifeDomain.fromCategory(ctx.task().category()).orElse(LifeDomain.HOUSEHOLD);
-LifeSlaPolicy policy = domain.descriptor().slaPolicy();
-if (ctx.task().candidateGroups().contains(policy.escalationGroup()))
-    return new BreachDecision.Fail("life-sla-exhausted");
-return BreachDecision.EscalateTo.to(policy.escalationGroup())
-    .withDeadline(policy.escalationDeadline());
-```
-
-The two-tier detection logic (check if escalation group already present = tier 2 exhausted) stays in `LifeSlaBreachPolicy` — it reads `ctx.task().candidateGroups()` which is casehub-work territory. `LifeSlaPolicy` carries only the domain-specific inputs (`escalationGroup`, `escalationDeadline`).
+`commitmentMode()` is a mode identity declaration for lookup purposes, distinct from `applies(CommitmentContext)` which tests execution eligibility against a reconstituted context. Both serve different callers.
 
 ---
 
-## Design 5: Case Hub Descriptors (`LifeCaseType`)
-
-### Architecture
-
-The current 8 `*CaseHub` beans each: (a) pass a YAML path to `super()`, and (b) augment the loaded `CaseDefinition` with worker lambdas. The `*CaseDefinitions` FuncDSL companions build the full structure in Java as an alternative representation.
-
-After the refactor:
-- **YAML files stay** — they are the source of truth for case structure (bindings, goals, plan items, signals). They have external tooling value and are already validated.
-- **`*CaseDescriptor` POJOs** — carry worker lambdas + case metadata (`lifeCaseType()`, `domain()`). Workers are business logic; they belong here.
-- **`*CaseHub` CDI shells** — become thin, extending `LifeTypedCaseHub` (see below). No worker methods. `*CaseDefinitions` FuncDSL classes are superseded; they can remain as test utilities if needed.
-- **`FamilyVoteCaseHub` and `CareEpisodeCaseHub` are out of scope** — both are spawned as sub-cases only, not registered with `LifeCaseType`, and have no `LifeCaseService` dispatch. `FamilyVoteCaseHub` has no workers (YAML-only). `CareEpisodeCaseHub` has workers — these move to a `CareEpisodeDescriptor`, but the hub remains a plain `YamlCaseHub` subclass, not a `LifeTypedCaseHub`.
-
-### `LifeCaseDescriptor` interface — `app/engine/`
-
-```java
-public interface LifeCaseDescriptor {
-    LifeCaseType lifeCaseType();
-    LifeDomain domain();
-    List<Worker> workers(); // lambdas that run on Quartz worker threads
-}
-```
-
-Lives in `app/engine/` (not `api/`) because `Worker` is from `casehub-engine-api`.
+## Design: Case Hub Descriptors (`LifeCaseType`)
 
 ### `LifeTypedCaseHub` abstract class — `app/engine/`
 
-An abstract class (not an interface) extending `YamlCaseHub`. This is the correct type for the constraint — Java interfaces cannot extend abstract classes, so the type safety (all `LifeTypedCaseHub` beans are also `CaseHub`) requires an abstract class. Provides double-checked locking for the augmented definition (matching the existing pattern in `AppointmentCycleCaseHub`):
+`LifeTypedCaseHub` is an abstract class, not an interface — it extends `YamlCaseHub` and owns the augmentation lifecycle. CDI shells extend it directly:
 
 ```java
 public abstract class LifeTypedCaseHub extends YamlCaseHub {
+    private volatile CaseDefinition augmented;
 
-    private volatile CaseDefinition augmentedDefinition;
-
-    protected LifeTypedCaseHub(String yamlPath) { super(yamlPath); }
+    protected LifeTypedCaseHub(String yamlPath) {
+        super(yamlPath);
+    }
 
     public abstract LifeCaseType lifeCaseType();
-    protected abstract LifeCaseDescriptor descriptor();
+    protected abstract List<Worker> workers();
 
     @Override
     public final CaseDefinition getDefinition() {
-        if (augmentedDefinition == null) {
+        if (augmented == null) {
             synchronized (this) {
-                if (augmentedDefinition == null) {
-                    CaseDefinition base = super.getDefinition();
-                    base.getWorkers().addAll(descriptor().workers());
-                    augmentedDefinition = base;
+                if (augmented == null) {
+                    CaseDefinition base = super.getDefinition(); // YAML load (reentrant — same lock)
+                    base.getWorkers().addAll(workers());
+                    augmented = base;
                 }
             }
         }
-        return augmentedDefinition;
+        return augmented;
     }
 }
 ```
 
-`getDefinition()` is `final` — subclasses must not override it. Caching is provided once, correctly.
+`getDefinition()` is `final` — caching and augmentation logic cannot be overridden. `workers()` is called exactly once under the lock. `super.getDefinition()` is also synchronized on `this`, which is safe because Java `synchronized` is reentrant for the same thread.
 
-The inheritance is intentional: `YamlCaseHub.super.getDefinition()` IS used — it loads and caches the YAML. The abstract class augments it with workers from the descriptor. Extending `YamlCaseHub` is not misleading.
+`LifeTypedCaseHub extends YamlCaseHub extends CaseHub`. `LifeCaseService` injects `Instance<LifeTypedCaseHub>`, which returns `CaseHub`-typed results through the inheritance chain — no cast required.
 
-### Thin CDI shell example
+### Six descriptor POJOs — `app/engine/`
+
+One per `LifeCaseType`. Provides `workers()` only — YAML owns the case structure (bindings, goals, capabilities). Example:
+
+```java
+public final class AppointmentCycleDescriptor {
+    public List<Worker> workers() {
+        return List.of(
+            bookAppointmentWorker(),
+            findAlternativeWorker(),
+            confirmAppointmentWorker(),
+            preVisitPrepWorker(),
+            recordHealthDecisionWorker()
+        );
+    }
+    private Worker bookAppointmentWorker() { ... }
+    // ...
+}
+```
+
+The descriptor has no CDI annotations and no injected deps. When Layer 7 (OpenClaw) wires real implementations, CDI deps are passed via constructor — the CDI shell injects them and passes them through.
+
+### Six thin CDI shells — extend `LifeTypedCaseHub`
 
 ```java
 @ApplicationScoped
 public class AppointmentCycleCaseHub extends LifeTypedCaseHub {
-
     public AppointmentCycleCaseHub() { super("life/appointment-cycle.yaml"); }
 
     @Override public LifeCaseType lifeCaseType() { return LifeCaseType.APPOINTMENT_CYCLE; }
-    @Override protected LifeCaseDescriptor descriptor() { return new AppointmentCycleDescriptor(); }
+    @Override protected List<Worker> workers() { return new AppointmentCycleDescriptor().workers(); }
 }
 ```
 
-If a descriptor needs a CDI dep (e.g. a service the workers call), the CDI shell injects it and passes via constructor:
+The descriptor is instantiated inside `workers()`, which is called at most once (under `getDefinition()`'s lock). No separate caching needed in the shell.
 
-```java
-@ApplicationScoped
-public class ContractorCoordinationCaseHub extends LifeTypedCaseHub {
-    @Inject SomeService service;
+### Sub-case hubs — explicit scoping
 
-    public ContractorCoordinationCaseHub() { super("life/contractor-coordination.yaml"); }
+**`FamilyVoteCaseHub`** — YAML-only; no workers; no descriptor. Stays exactly as-is. `FamilyVote` has no `LifeCaseType` (it is spawned only as a sub-case by the engine). Does NOT extend `LifeTypedCaseHub`.
 
-    @Override public LifeCaseType lifeCaseType() { return LifeCaseType.CONTRACTOR_COORDINATION; }
-    @Override protected LifeCaseDescriptor descriptor() { return new ContractorCoordinationDescriptor(service); }
-}
-```
+**`CareEpisodeCaseHub`** — has workers but no `LifeCaseType` (spawned as sub-case by `care-coordination`). Gets a `CareEpisodeDescriptor` that provides `workers()`, but stays a direct `YamlCaseHub` extension — it does NOT extend `LifeTypedCaseHub`. Manages its own augmentation lifecycle (same double-checked locking pattern as the current code, updated to delegate worker construction to the descriptor).
 
-`descriptor()` is called inside the double-checked lock. All `@Inject` fields on an `@ApplicationScoped` bean are resolved before any method dispatch arrives via the CDI proxy — no null risk.
-
-### `LifeCaseService.resolve()` — type-safe CDI discovery, no switch
-
-`Instance<LifeTypedCaseHub>` returns only the 6 beans that extend `LifeTypedCaseHub`. Each is also a `CaseHub` (through the class hierarchy: `LifeTypedCaseHub → YamlCaseHub → CaseHub`). No cast required:
+### `LifeCaseService.resolve()` — no switch
 
 ```java
 @Inject Instance<LifeTypedCaseHub> caseHubs;
@@ -411,11 +434,15 @@ private CaseHub resolve(LifeCaseType type) {
     return caseHubs.stream()
         .filter(h -> h.lifeCaseType() == type)
         .findFirst()
-        .orElseThrow(() -> new IllegalStateException("No LifeTypedCaseHub for type: " + type));
+        .orElseThrow(() -> new IllegalStateException("No CaseHub for type: " + type));
 }
 ```
 
-The six directly-injected `@Inject AppointmentCycleCaseHub` fields in `LifeCaseService` are removed.
+`FamilyVoteCaseHub` and `CareEpisodeCaseHub` do not extend `LifeTypedCaseHub`, so they are not in the `Instance` — the resolver cannot accidentally return them for direct-start requests.
+
+### DSL companion deprecation
+
+The 8 `*CaseDefinitions` companion classes are removed as part of this change. PP-20260518 is updated: the paired DSL companion pattern is deprecated for case hubs. YAML is the canonical case structure source; `*Descriptor` POJOs are the testable Java artifact for workers. A follow-up task (see Deferred) records the protocol update.
 
 ---
 
@@ -424,9 +451,9 @@ The six directly-injected `@Inject AppointmentCycleCaseHub` fields in `LifeCaseS
 ```
 api/
   LifeDomain               ← add descriptor() + fromCategory()
-  LifeDomainDescriptor     ← new interface (no engine-api dep)
-  LifeRoutingPolicy        ← moved from app/routing/ (package change only, unchanged record)
-  LifeSlaPolicy            ← new record (pure Java)
+  LifeDomainDescriptor     ← new interface (no producesLedgerEntry)
+  LifeRoutingPolicy        ← moved from app/routing/ (record signature unchanged)
+  LifeSlaPolicy            ← new record
   descriptor/
     HealthDomainDescriptor
     LegalDomainDescriptor
@@ -436,7 +463,7 @@ api/
     TravelDomainDescriptor
     ContractorCoordinationDomainDescriptor
     ElderCareDomainDescriptor
-  HouseholdActionType      ← remove ThresholdCategory + ThresholdCategory enum
+  HouseholdActionType      ← remove ThresholdCategory enum + field
 
 app/
   routing/
@@ -455,67 +482,71 @@ app/
       LegalDocumentSubmitRule
       ElderCareDecisionRule
   service/ledger/
-    DomainLedgerHandler        ← new interface
-    HealthDomainLedgerHandler  ← new CDI handler
-    LegalDomainLedgerHandler   ← new CDI handler
-    FinanceDomainLedgerHandler ← new CDI handler (no-op on CREATED)
-    LifeLedgerWriter           ← shrinks: erasure + populateBase only
+    DomainLedgerHandler       ← new interface (two writeEntry overloads)
+    HealthDomainLedgerHandler ← new CDI handler
+    LegalDomainLedgerHandler  ← new CDI handler
+    FinanceDomainLedgerHandler← new CDI handler (both overloads)
+    LifeLedgerWriter          ← shrinks: erasure + populateBase only
     LifeOutcomeAttestationWriter ← simplified: no DOMAIN_TO_CAPABILITY map
+  commitment/
+    LifeCommitmentStrategy    ← add escalationTitle() + commitmentMode()
+  spi/
+    LifeSlaBreachPolicy       ← thin dispatcher using domain.descriptor().slaPolicy()
   engine/
-    LifeCaseDescriptor         ← new interface (in app/ — references Worker from engine-api)
-    LifeTypedCaseHub           ← new abstract class (extends YamlCaseHub, caching + template)
-    AppointmentCycleDescriptor ← new POJO
+    LifeTypedCaseHub          ← new abstract class (extends YamlCaseHub)
+    AppointmentCycleDescriptor← new POJO (workers only)
     HomeMaintenanceDescriptor
     TravelPlanDescriptor
     CareCoordinationDescriptor
-    ContractorCoordinationDescriptor (engine)
+    ContractorCoordinationDescriptor
     FinancialReviewDescriptor
-    CareEpisodeDescriptor      ← new POJO (workers only; hub stays plain YamlCaseHub subclass)
-    AppointmentCycleCaseHub    ← shrinks to CDI shell extending LifeTypedCaseHub
+    CareEpisodeDescriptor     ← new POJO (workers only; for CareEpisodeCaseHub)
+    AppointmentCycleCaseHub   ← thin shell (extends LifeTypedCaseHub)
     HomeMaintenanceCaseHub
     TravelPlanCaseHub
     CareCoordinationCaseHub
     ContractorCoordinationCaseHub
     FinancialReviewCaseHub
-    FamilyVoteCaseHub          ← unchanged (sub-case hub, YAML-only, no LifeCaseType)
-    CareEpisodeCaseHub         ← shrinks to CDI shell extending YamlCaseHub (not LifeTypedCaseHub)
-  commitment/
-    LifeCommitmentStrategy    ← add commitmentMode() + escalationTitle()
-  spi/
-    LifeSlaBreachPolicy       ← thin dispatcher using domain.descriptor().slaPolicy()
+    CareEpisodeCaseHub        ← updated: delegates workers() to descriptor; stays YamlCaseHub
+    FamilyVoteCaseHub         ← unchanged
+    (8 *CaseDefinitions companions removed)
 ```
 
 ---
 
 ## Testing
 
-### Domain descriptor tests (pure JUnit, `api/`)
-- One test class per descriptor: `capability()`, `templateCategory()`, `routingPolicy()` values (verify `OptionalDouble.of(N)` present or `.empty()` for HOUSEHOLD/FAMILY_SCHEDULING), `workerCapabilities()` set, `slaPolicy()` escalation group and deadline
-- `LifeDomain.fromCategory()` roundtrip for all 8 descriptors + null → HOUSEHOLD default
+### Descriptor tests (pure JUnit, `api/`)
+- One test class per domain descriptor: verify `capability()`, `templateCategory()`, `routingPolicy()` values (including empty optionals for HOUSEHOLD/FAMILY_SCHEDULING), `workerCapabilities()` set, `slaPolicy()` escalation group and deadline
+- `LifeDomain.fromCategory()` roundtrip for all 8 descriptors
 
 ### Risk rule tests (pure JUnit, `app/routing/rules/`)
-- One test class per rule: ALWAYS/NEVER/AMOUNT_THRESHOLD decisions with mock `Preferences`
-- `SpendPurchaseRule`: at threshold → GateRequired, below → Autonomous, missing amount → Autonomous, unparseable → Autonomous
-- Each rule: verify `actionType()`, `reversible`, `candidateGroups`, scope, reason string structure
+- One test class per rule: verify ALWAYS/NEVER/AMOUNT_THRESHOLD decisions with mock `Preferences`
+- Boundary: at/below/above threshold, missing amount, unparseable amount
 
 ### Handler tests (Mockito, `app/service/ledger/`)
-- Mock `LedgerEntryRepository` and `LifeOutcomeAttestationWriter`
-- HEALTH/LEGAL: verify `HealthDecisionLedgerEntry` / `LegalActionLedgerEntry` fields on CREATED, SLA_BREACH, COMPLETED; verify attestation called on SLA_BREACH and COMPLETED, not CREATED
-- FINANCE: verify CREATED is a no-op; SLA_BREACH and COMPLETED write `FinancialDecisionLedgerEntry` from `LifeCommitmentRecord`
+- Mock `LedgerEntryRepository` + dependencies
+- `HealthDomainLedgerHandler`, `LegalDomainLedgerHandler`: verify correct `LedgerEntry` subclass constructed, fields set, attestation triggered
+- `FinanceDomainLedgerHandler`: verify WorkItem-based overload writes on SLA_BREACH/COMPLETED; verify no-op on CREATED; verify commitment-based overload writes correctly for oversight CREATED
+- Do not assert on `entry.id` or `entry.occurredAt` — set by `@PrePersist`, bypassed in Mockito tests
+
+### Commitment strategy tests (Mockito, `app/commitment/`)
+- Verify `commitmentMode()` returns correct enum for each implementation
+- Verify `escalationTitle(record)` produces correct message for each mode
 
 ### Case descriptor tests (pure JUnit, `app/engine/`)
-- `new AppointmentCycleDescriptor().lifeCaseType()` == APPOINTMENT_CYCLE
-- `new AppointmentCycleDescriptor().workers()` non-empty, correct worker names
+- One test class per descriptor: verify `workers()` returns non-empty list with correct worker names
+- No Quarkus startup needed
 
 ### Dispatcher tests (Mockito)
-- `LifeActionRiskClassifier`: startup `IllegalStateException` on missing rule; correct rule called per action type; unknown type → Autonomous
-- `LifeDecisionLedgerObserver`: correct handler called for HEALTH/LEGAL/FINANCE; domains without handler (HOUSEHOLD) produce no invocation
-- `LifeTaskService`: CREATED calls handler for HEALTH/LEGAL; HOUSEHOLD produces no handler call
+- `LifeActionRiskClassifier`: startup validation throws on missing rule; correct rule called per action type
+- `LifeDecisionLedgerObserver`: correct handler called per domain; domains without handler produce no entry
+- `LifeCaseService`: correct hub resolved per case type; missing hub throws; `FamilyVoteCaseHub` not in `Instance<LifeTypedCaseHub>`
 
-### Updated integration tests (`@QuarkusTest`)
-- `LifeActionRiskClassifierQuarkusTest` — CDI wiring still satisfied; `Instance<ActionRiskClassifier>` non-empty
-- `LifeTrustRoutingPolicyProviderTest` — routing policy values unchanged, YAML overlay still works, O(1) index built correctly
-- `LifeSlaBreachPolicyTest` (new) — HEALTH domain 24h deadline, HOUSEHOLD domain 48h deadline, tier-2 exhaustion returns Fail
+### Updated integration tests
+- `LifeActionRiskClassifierQuarkusTest` — CDI wiring still satisfied
+- `LifeTrustRoutingPolicyProviderTest` — routing policy values unchanged (derived from descriptors), YAML overlay still works; verify `@PostConstruct` index resolves all expected worker capability names
+- `LifeSlaBreachPolicyTest` — per-domain escalation deadlines verified via `@QuarkusTest`
 
 ---
 
@@ -525,17 +556,19 @@ app/
 |---|---|
 | life#30 | Second-pass audit — verify nothing was missed in this sweep |
 | parent#202 | Universal descriptor+handler coherence protocol for all casehubio application repos |
+| parent#204 | Update PP-20260518 — DSL companion pattern deprecated for case hubs; `*Descriptor` POJO replaces `*CaseDefinitions` as testable Java artifact; YAML is canonical structure |
 | life#26 | RBAC-differentiated risk thresholds (blocked on auth retrofit) |
 
 ---
 
 ## Platform coherence
 
-- All `api/` descriptor POJOs are pure Java — `LifeRoutingPolicy` (moved), `LifeSlaPolicy` (new), `LifeDomainDescriptor` (new) carry no framework deps ✅
-- `LifeDomainDescriptor` and `LifeRoutingPolicy` live in `api/`; `LifeCaseDescriptor` lives in `app/` (references `Worker` from engine-api) — correct per module-tier-structure ✅
-- `ThresholdCategory` removal from `HouseholdActionType` is a breaking API change — no external consumers, acceptable ✅
-- `DomainLedgerHandler` in `app/` — correct: implementations reference JPA entities ✅
-- `LifeTypedCaseHub` abstract class preserves `YamlCaseHub` YAML-load caching and adds augmentation caching — no double initialization ✅
-- `FamilyVoteCaseHub` and `CareEpisodeCaseHub` are sub-case hubs; `FamilyVoteCaseHub` needs no descriptor (YAML-only); `CareEpisodeCaseHub` gets a `CareEpisodeDescriptor` for its workers but remains a plain `YamlCaseHub` extension — not a `LifeTypedCaseHub` ✅
-- `LifeTrustRoutingPolicyProvider` O(1) lookup preserved via `@PostConstruct` index; YAML scope keys unchanged (same `LifeCapabilities` string values) ✅
-- `LifeCommitmentStrategy.commitmentMode()` enables mode-safe lookup without reconstituting `CommitmentContext`; `escalationTitle()` is abstract — all three implementations provide it ✅
+- All descriptor POJOs are in `api/` or `app/` — no framework leakage ✅
+- `LifeRoutingPolicy` move from `app/` to `api/` is a package rename; record signature unchanged ✅
+- `ThresholdCategory` removal from `HouseholdActionType` — no external consumers ✅
+- `DomainLedgerHandler` interface in `app/` — correct: references JPA entities ✅
+- `LifeTypedCaseHub` as abstract class (not interface) — Java requirement; extends `YamlCaseHub`; `CaseHub` return type preserved through inheritance ✅
+- `FamilyVoteCaseHub` and `CareEpisodeCaseHub` excluded from `LifeTypedCaseHub` — both are sub-case hubs with no `LifeCaseType`; engine discovers them as `CaseHub` beans regardless ✅
+- `LifeCommitmentStrategy.escalationTitle()` and `commitmentMode()` are additive — all three implementations provide them ✅
+- YAML trust-routing scope keys unchanged — `domain.descriptor().capability()` returns the same coarse-grained strings as the old `POLICIES` map ✅
+- `OversightGateStrategy` migrates `LifeLedgerWriter` injection to `Instance<DomainLedgerHandler>` — FINANCE CREATED write path preserved via commitment-based overload ✅
