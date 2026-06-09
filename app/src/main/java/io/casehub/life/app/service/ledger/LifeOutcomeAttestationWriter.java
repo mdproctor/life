@@ -5,7 +5,6 @@ import io.casehub.ledger.api.model.CapabilityTag;
 import io.casehub.ledger.runtime.model.LedgerAttestation;
 import io.casehub.ledger.runtime.model.LedgerEntry;
 import io.casehub.ledger.runtime.repository.LedgerEntryRepository;
-import io.casehub.life.api.LifeCapabilities;
 import io.casehub.life.api.LifeDomain;
 import io.casehub.life.api.LifeTrustDimensions;
 import io.casehub.life.app.LifeDecisionEventType;
@@ -17,7 +16,6 @@ import jakarta.inject.Inject;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Map;
 
 /**
  * Converts WorkItem outcomes and SLA breaches into LedgerAttestation records.
@@ -27,17 +25,6 @@ import java.util.Map;
  */
 @ApplicationScoped
 public class LifeOutcomeAttestationWriter {
-
-    private static final Map<LifeDomain, String> DOMAIN_TO_CAPABILITY = Map.of(
-            LifeDomain.HOUSEHOLD, LifeCapabilities.HOUSEHOLD_MANAGEMENT,
-            LifeDomain.HEALTH, LifeCapabilities.HEALTH_COORDINATION,
-            LifeDomain.FINANCE, LifeCapabilities.FINANCIAL_PLANNING,
-            LifeDomain.FAMILY_SCHEDULING, LifeCapabilities.FAMILY_SCHEDULING,
-            LifeDomain.TRAVEL, LifeCapabilities.TRAVEL_PLANNING,
-            LifeDomain.LEGAL, LifeCapabilities.LEGAL_DEADLINE,
-            LifeDomain.CONTRACTOR_COORDINATION, LifeCapabilities.CONTRACTOR_COORDINATION,
-            LifeDomain.ELDER_CARE, LifeCapabilities.ELDER_CARE
-    );
 
     @Inject
     LedgerEntryRepository ledgerRepository;
@@ -107,23 +94,16 @@ public class LifeOutcomeAttestationWriter {
 
     private String resolveCapabilityTag(final LifeTaskContext ctx, final WorkItem workItem) {
         if (ctx.domain != null) {
-            String tag = DOMAIN_TO_CAPABILITY.get(ctx.domain);
-            if (tag != null) return tag;
+            return ctx.domain.descriptor().capability();
         }
-
         if (workItem.scope != null) {
-            var segments = workItem.scope.split("/");
+            String[] segments = workItem.scope.split("/");
             if (segments.length >= 3) {
                 try {
-                    var domain = LifeDomain.valueOf(segments[2].toUpperCase());
-                    String tag = DOMAIN_TO_CAPABILITY.get(domain);
-                    if (tag != null) return tag;
-                } catch (IllegalArgumentException ignored) {
-                }
+                    return LifeDomain.valueOf(segments[2].toUpperCase()).descriptor().capability();
+                } catch (IllegalArgumentException ignored) {}
             }
         }
-
-        // Ultimate fallback
         return CapabilityTag.GLOBAL;
     }
 

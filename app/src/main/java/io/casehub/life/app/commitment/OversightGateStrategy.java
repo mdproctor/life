@@ -5,15 +5,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.casehub.life.api.commitment.CommitmentMode;
 import io.casehub.life.api.commitment.CommitmentOutcome;
 import io.casehub.life.api.commitment.CommitmentStatus;
+import io.casehub.life.api.LifeDomain;
 import io.casehub.life.app.LifeDecisionEventType;
 import io.casehub.life.app.entity.LifeCommitmentRecord;
 import io.casehub.life.app.infrastructure.LifeChannelInitializer;
-import io.casehub.life.app.service.ledger.LifeLedgerWriter;
+import io.casehub.life.app.service.ledger.DomainLedgerHandler;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.runtime.message.MessageService;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.WebApplicationException;
 
@@ -32,8 +35,8 @@ public class OversightGateStrategy implements LifeCommitmentStrategy {
     @Inject
     ObjectMapper objectMapper;
 
-    @Inject
-    LifeLedgerWriter lifeLedgerWriter;
+    @Inject @Any
+    Instance<DomainLedgerHandler> ledgerHandlers;
 
     @Override
     public boolean applies(final CommitmentContext context) {
@@ -91,7 +94,10 @@ public class OversightGateStrategy implements LifeCommitmentStrategy {
         record.createdAt = record.updatedAt = Instant.now();
         record.persist();
 
-        lifeLedgerWriter.writeFinancialEntry(LifeDecisionEventType.CREATED, record, null);
+        ledgerHandlers.stream()
+                .filter(h -> h.domain() == LifeDomain.FINANCE)
+                .findFirst()
+                .ifPresent(h -> h.writeEntry(LifeDecisionEventType.CREATED, record));
 
         return new CommitmentOutcome(record.id, correlationId,
                 CommitmentMode.OVERSIGHT, CommitmentStatus.PENDING_RESPONSE);

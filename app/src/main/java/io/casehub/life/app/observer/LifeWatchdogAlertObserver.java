@@ -1,16 +1,19 @@
 package io.casehub.life.app.observer;
 
+import io.casehub.life.api.LifeDomain;
 import io.casehub.life.api.commitment.CommitmentMode;
 import io.casehub.life.api.commitment.CommitmentStatus;
 import io.casehub.life.api.request.CreateLifeTaskRequest;
 import io.casehub.life.app.LifeDecisionEventType;
 import io.casehub.life.app.entity.LifeCommitmentRecord;
 import io.casehub.life.app.service.LifeTaskService;
-import io.casehub.life.app.service.ledger.LifeLedgerWriter;
+import io.casehub.life.app.service.ledger.DomainLedgerHandler;
 import io.casehub.qhorus.api.watchdog.WatchdogAlertEvent;
 import io.casehub.qhorus.api.watchdog.WatchdogConditionType;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.ObservesAsync;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
@@ -44,8 +47,8 @@ public class LifeWatchdogAlertObserver {
     @Inject
     ObjectMapper objectMapper;
 
-    @Inject
-    LifeLedgerWriter lifeLedgerWriter;
+    @Inject @Any
+    Instance<DomainLedgerHandler> ledgerHandlers;
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void onAlert(@ObservesAsync final WatchdogAlertEvent event) {
@@ -56,7 +59,10 @@ public class LifeWatchdogAlertObserver {
 
         for (final LifeCommitmentRecord record : expired) {
             if (record.mode == CommitmentMode.OVERSIGHT) {
-                lifeLedgerWriter.writeFinancialEntry(LifeDecisionEventType.SLA_BREACH, record, null);
+                ledgerHandlers.stream()
+                        .filter(h -> h.domain() == LifeDomain.FINANCE)
+                        .findFirst()
+                        .ifPresent(h -> h.writeEntry(LifeDecisionEventType.SLA_BREACH, record));
             }
             createEscalationTask(record);
             record.status = CommitmentStatus.EXPIRED;

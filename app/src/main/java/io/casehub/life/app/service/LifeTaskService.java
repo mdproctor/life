@@ -9,13 +9,15 @@ import io.casehub.life.app.entity.ExternalActor;
 import io.casehub.life.app.entity.LifeCommitmentRecord;
 import io.casehub.life.app.LifeDecisionEventType;
 import io.casehub.life.app.entity.LifeTaskContext;
-import io.casehub.life.app.service.ledger.LifeLedgerWriter;
+import io.casehub.life.app.service.ledger.DomainLedgerHandler;
 import io.casehub.work.runtime.model.WorkItem;
 import io.casehub.work.runtime.model.WorkItemCreateRequest;
 import io.casehub.work.runtime.model.WorkItemTemplate;
 import io.casehub.work.runtime.service.WorkItemService;
 import io.casehub.work.runtime.service.WorkItemTemplateService;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
@@ -32,8 +34,8 @@ public class LifeTaskService {
     @Inject
     WorkItemTemplateService workItemTemplateService;
 
-    @Inject
-    LifeLedgerWriter lifeLedgerWriter;
+    @Inject @Any
+    Instance<DomainLedgerHandler> ledgerHandlers;
 
     @Transactional
     public LifeTaskResponse create(final CreateLifeTaskRequest req) {
@@ -68,7 +70,7 @@ public class LifeTaskService {
                         ChronoUnit.HOURS);
 
         // Derive LifeDomain from template category.
-        final LifeDomain domain = domainFromCategory(template.category);
+        final LifeDomain domain = LifeDomain.fromCategory(template.category).orElse(LifeDomain.HOUSEHOLD);
 
         // Build WorkItemCreateRequest — groups come from template only, not from caller.
         final WorkItemCreateRequest workReq = WorkItemCreateRequest.builder()
@@ -92,11 +94,10 @@ public class LifeTaskService {
         ctx.externalActorId = req.externalActorId();
         ctx.persist();
 
-        if (domain == LifeDomain.HEALTH) {
-            lifeLedgerWriter.writeHealthEntry(LifeDecisionEventType.CREATED, ctx, workItem);
-        } else if (domain == LifeDomain.LEGAL) {
-            lifeLedgerWriter.writeLegalEntry(LifeDecisionEventType.CREATED, ctx, workItem);
-        }
+        ledgerHandlers.stream()
+                .filter(h -> h.domain() == domain)
+                .findFirst()
+                .ifPresent(h -> h.writeEntry(LifeDecisionEventType.CREATED, workItem.id, workItem));
 
         return new LifeTaskResponse(
                 workItem.id,
@@ -129,19 +130,5 @@ public class LifeTaskService {
                 workItem.createdAt,
                 mode, status
         );
-    }
-
-    private LifeDomain domainFromCategory(final String category) {
-        if (category == null) return LifeDomain.HOUSEHOLD;
-        return switch (category) {
-            case "health" -> LifeDomain.HEALTH;
-            case "contractor" -> LifeDomain.CONTRACTOR_COORDINATION;
-            case "finance" -> LifeDomain.FINANCE;
-            case "legal" -> LifeDomain.LEGAL;
-            case "family" -> LifeDomain.FAMILY_SCHEDULING;
-            case "travel" -> LifeDomain.TRAVEL;
-            case "elder-care" -> LifeDomain.ELDER_CARE;
-            default -> LifeDomain.HOUSEHOLD;
-        };
     }
 }
