@@ -7,6 +7,7 @@ import io.casehub.life.api.LifeDomain;
 import io.casehub.life.app.LifeDecisionEventType;
 import io.casehub.life.app.entity.LifeTaskContext;
 import io.casehub.life.app.ledger.LegalActionLedgerEntry;
+import io.casehub.platform.api.identity.TenancyConstants;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.work.runtime.model.WorkItem;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -61,7 +62,7 @@ public class LegalDomainLedgerHandler implements DomainLedgerHandler {
         entry.eventType       = event;
         entry.actionTaken     = event == LifeDecisionEventType.COMPLETED ? workItem.outcome : null;
 
-        ledgerRepository.save(entry);
+        ledgerRepository.save(entry, TenancyConstants.DEFAULT_TENANT_ID);
         attestationWriter.attestOutcome(entry, event, ctx, workItem);
     }
 

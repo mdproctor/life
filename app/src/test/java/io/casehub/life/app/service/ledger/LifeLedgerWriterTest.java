@@ -32,8 +32,8 @@ class LifeLedgerWriterTest {
 
     @BeforeEach
     void setUp() {
-        when(ledgerRepository.findLatestBySubjectId(any())).thenReturn(Optional.empty());
-        when(ledgerRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerRepository.findLatestBySubjectId(any(), any())).thenReturn(Optional.empty());
+        when(ledgerRepository.save(any(), any())).thenAnswer(i -> i.getArgument(0));
     }
 
     // ── Erasure ────────────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ class LifeLedgerWriterTest {
 
     private ExternalActorErasureLedgerEntry captureErasure() {
         var cap = ArgumentCaptor.forClass(LedgerEntry.class);
-        verify(ledgerRepository).save(cap.capture());
+        verify(ledgerRepository).save(cap.capture(), any());
         return (ExternalActorErasureLedgerEntry) cap.getValue();
     }
 }

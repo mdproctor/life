@@ -58,7 +58,7 @@ class LifeOutcomeAttestationWriterTest {
 
         // Then: a SOUND verdict attestation is saved
         var captor = ArgumentCaptor.forClass(LedgerAttestation.class);
-        verify(ledgerRepository, atLeastOnce()).saveAttestation(captor.capture());
+        verify(ledgerRepository, atLeastOnce()).saveAttestation(captor.capture(), any());
 
         var verdictAttestations = captor.getAllValues().stream()
                 .filter(a -> a.trustDimension == null)
@@ -93,7 +93,7 @@ class LifeOutcomeAttestationWriterTest {
 
         // Then: a FLAGGED verdict attestation is saved
         var captor = ArgumentCaptor.forClass(LedgerAttestation.class);
-        verify(ledgerRepository, atLeastOnce()).saveAttestation(captor.capture());
+        verify(ledgerRepository, atLeastOnce()).saveAttestation(captor.capture(), any());
 
         var verdictAttestations = captor.getAllValues().stream()
                 .filter(a -> a.trustDimension == null)
@@ -126,7 +126,7 @@ class LifeOutcomeAttestationWriterTest {
 
         // Then: a deadline-reliability dimension attestation is saved with score 1.0
         var captor = ArgumentCaptor.forClass(LedgerAttestation.class);
-        verify(ledgerRepository, atLeastOnce()).saveAttestation(captor.capture());
+        verify(ledgerRepository, atLeastOnce()).saveAttestation(captor.capture(), any());
 
         var dimensionAttestations = captor.getAllValues().stream()
                 .filter(a -> a.trustDimension != null)
@@ -156,7 +156,7 @@ class LifeOutcomeAttestationWriterTest {
         attestationWriter.attestOutcome(entry, LifeDecisionEventType.COMPLETED, ctx, workItem);
 
         // Then: saveAttestation is never called
-        verify(ledgerRepository, never()).saveAttestation(any());
+        verify(ledgerRepository, never()).saveAttestation(any(), any());
     }
 
     @Test
@@ -171,7 +171,7 @@ class LifeOutcomeAttestationWriterTest {
 
         attestationWriter.attestOutcome(entry, LifeDecisionEventType.CREATED, ctx, workItem);
 
-        verify(ledgerRepository, never()).saveAttestation(any());
+        verify(ledgerRepository, never()).saveAttestation(any(), any());
     }
 
     @Test
@@ -191,7 +191,7 @@ class LifeOutcomeAttestationWriterTest {
 
         // Then: capabilityTag is "*" (GLOBAL)
         var captor = ArgumentCaptor.forClass(LedgerAttestation.class);
-        verify(ledgerRepository, atLeastOnce()).saveAttestation(captor.capture());
+        verify(ledgerRepository, atLeastOnce()).saveAttestation(captor.capture(), any());
 
         var verdictAttestations = captor.getAllValues().stream()
                 .filter(a -> a.trustDimension == null)

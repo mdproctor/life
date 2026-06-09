@@ -51,7 +51,7 @@ class HealthDomainLedgerHandlerTest {
             }
         };
         handler.writeEntry(LifeDecisionEventType.COMPLETED, taskId, workItem);
-        verify(ledgerRepository, never()).save(any());
+        verify(ledgerRepository, never()).save(any(), any());
     }
 
     @Test void writeEntry_completed_savesHealthEntry() {
@@ -71,13 +71,13 @@ class HealthDomainLedgerHandlerTest {
             }
         };
 
-        when(ledgerRepository.findLatestBySubjectId(any())).thenReturn(Optional.empty());
-        when(ledgerRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerRepository.findLatestBySubjectId(any(), any())).thenReturn(Optional.empty());
+        when(ledgerRepository.save(any(), any())).thenAnswer(i -> i.getArgument(0));
 
         handler.writeEntry(LifeDecisionEventType.COMPLETED, taskId, workItem);
 
         ArgumentCaptor<LedgerEntry> captor = ArgumentCaptor.forClass(LedgerEntry.class);
-        verify(ledgerRepository).save(captor.capture());
+        verify(ledgerRepository).save(captor.capture(), any());
         assertInstanceOf(HealthDecisionLedgerEntry.class, captor.getValue());
         HealthDecisionLedgerEntry entry = (HealthDecisionLedgerEntry) captor.getValue();
         assertEquals("appointment-attended", entry.outcome);
@@ -100,13 +100,13 @@ class HealthDomainLedgerHandlerTest {
             }
         };
 
-        when(ledgerRepository.findLatestBySubjectId(any())).thenReturn(Optional.empty());
-        when(ledgerRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerRepository.findLatestBySubjectId(any(), any())).thenReturn(Optional.empty());
+        when(ledgerRepository.save(any(), any())).thenAnswer(i -> i.getArgument(0));
 
         handler.writeEntry(LifeDecisionEventType.SLA_BREACH, taskId, workItem);
 
         ArgumentCaptor<LedgerEntry> captor = ArgumentCaptor.forClass(LedgerEntry.class);
-        verify(ledgerRepository).save(captor.capture());
+        verify(ledgerRepository).save(captor.capture(), any());
         assertNull(((HealthDecisionLedgerEntry) captor.getValue()).outcome);
     }
 
@@ -126,8 +126,8 @@ class HealthDomainLedgerHandlerTest {
             }
         };
 
-        when(ledgerRepository.findLatestBySubjectId(any())).thenReturn(Optional.empty());
-        when(ledgerRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerRepository.findLatestBySubjectId(any(), any())).thenReturn(Optional.empty());
+        when(ledgerRepository.save(any(), any())).thenAnswer(i -> i.getArgument(0));
 
         handler.writeEntry(LifeDecisionEventType.COMPLETED, taskId, workItem);
         verify(attestationWriter).attestOutcome(any(), eq(LifeDecisionEventType.COMPLETED), eq(ctx), eq(workItem));

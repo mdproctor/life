@@ -10,6 +10,7 @@ import io.casehub.life.api.LifeTrustDimensions;
 import io.casehub.life.app.LifeDecisionEventType;
 import io.casehub.life.app.entity.LifeTaskContext;
 import io.casehub.platform.api.identity.ActorType;
+import io.casehub.platform.api.identity.TenancyConstants;
 import io.casehub.work.runtime.model.WorkItem;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -68,7 +69,7 @@ public class LifeOutcomeAttestationWriter {
         attestation.confidence = 0.9;
         attestation.capabilityTag = capabilityTag;
 
-        ledgerRepository.saveAttestation(attestation);
+        ledgerRepository.saveAttestation(attestation, TenancyConstants.DEFAULT_TENANT_ID);
     }
 
     private void saveDeadlineReliabilityAttestation(final LedgerEntry entry,
@@ -89,7 +90,7 @@ public class LifeOutcomeAttestationWriter {
         attestation.trustDimension = LifeTrustDimensions.DEADLINE_RELIABILITY;
         attestation.dimensionScore = score;
 
-        ledgerRepository.saveAttestation(attestation);
+        ledgerRepository.saveAttestation(attestation, TenancyConstants.DEFAULT_TENANT_ID);
     }
 
     private String resolveCapabilityTag(final LifeTaskContext ctx, final WorkItem workItem) {

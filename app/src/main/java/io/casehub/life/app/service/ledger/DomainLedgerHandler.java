@@ -4,6 +4,7 @@ import io.casehub.ledger.runtime.repository.LedgerEntryRepository;
 import io.casehub.life.api.LifeDomain;
 import io.casehub.life.app.LifeDecisionEventType;
 import io.casehub.life.app.entity.LifeCommitmentRecord;
+import io.casehub.platform.api.identity.TenancyConstants;
 import io.casehub.work.runtime.model.WorkItem;
 
 import java.util.UUID;
@@ -20,7 +21,7 @@ public interface DomainLedgerHandler {
     }
 
     static int nextSequenceNumber(LedgerEntryRepository repo, UUID subjectId) {
-        return repo.findLatestBySubjectId(subjectId)
+        return repo.findLatestBySubjectId(subjectId, TenancyConstants.DEFAULT_TENANT_ID)
                    .map(e -> e.sequenceNumber + 1)
                    .orElse(1);
     }

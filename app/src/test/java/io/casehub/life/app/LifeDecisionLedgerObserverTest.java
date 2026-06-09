@@ -1,6 +1,7 @@
 package io.casehub.life.app;
 
 import io.casehub.ledger.runtime.repository.LedgerEntryRepository;
+import io.casehub.platform.api.identity.TenancyConstants;
 import io.casehub.life.api.LifeDomain;
 import io.casehub.life.app.entity.LifeTaskContext;
 import io.casehub.life.app.ledger.HealthDecisionLedgerEntry;
@@ -53,7 +54,7 @@ class LifeDecisionLedgerObserverTest {
     void onSlaBreachEvent_writesHealthSlaBreachEntry() {
         observer.onSlaBreachEvent(breachEvent(healthWorkItemId));
 
-        var entry = ledgerRepository.findLatestBySubjectId(healthWorkItemId).orElseThrow();
+        var entry = ledgerRepository.findLatestBySubjectId(healthWorkItemId, TenancyConstants.DEFAULT_TENANT_ID).orElseThrow();
         assertThat(entry).isInstanceOf(HealthDecisionLedgerEntry.class);
         assertThat(((HealthDecisionLedgerEntry) entry).eventType).isEqualTo(LifeDecisionEventType.SLA_BREACH);
     }
@@ -62,7 +63,7 @@ class LifeDecisionLedgerObserverTest {
     void onSlaBreachEvent_writesLegalSlaBreachEntry() {
         observer.onSlaBreachEvent(breachEvent(legalWorkItemId));
 
-        var entry = ledgerRepository.findLatestBySubjectId(legalWorkItemId).orElseThrow();
+        var entry = ledgerRepository.findLatestBySubjectId(legalWorkItemId, TenancyConstants.DEFAULT_TENANT_ID).orElseThrow();
         assertThat(entry).isInstanceOf(LegalActionLedgerEntry.class);
         assertThat(((LegalActionLedgerEntry) entry).eventType).isEqualTo(LifeDecisionEventType.SLA_BREACH);
     }
@@ -70,14 +71,14 @@ class LifeDecisionLedgerObserverTest {
     @Test
     void onSlaBreachEvent_skipsHouseholdDomainTask() {
         observer.onSlaBreachEvent(breachEvent(householdWorkItemId));
-        assertThat(ledgerRepository.findLatestBySubjectId(householdWorkItemId)).isEmpty();
+        assertThat(ledgerRepository.findLatestBySubjectId(householdWorkItemId, TenancyConstants.DEFAULT_TENANT_ID)).isEmpty();
     }
 
     @Test
     void onSlaBreachEvent_skipsWorkItemWithNoLifeTaskContext() {
         var orphanId = createBareWorkItem();
         observer.onSlaBreachEvent(breachEvent(orphanId));
-        assertThat(ledgerRepository.findLatestBySubjectId(orphanId)).isEmpty();
+        assertThat(ledgerRepository.findLatestBySubjectId(orphanId, TenancyConstants.DEFAULT_TENANT_ID)).isEmpty();
     }
 
     @Test
@@ -85,7 +86,7 @@ class LifeDecisionLedgerObserverTest {
         observer.onLifecycleEvent(completedEvent(healthWorkItemId, "appointment-confirmed"));
 
         var entry = (HealthDecisionLedgerEntry) ledgerRepository
-                .findLatestBySubjectId(healthWorkItemId).orElseThrow();
+                .findLatestBySubjectId(healthWorkItemId, TenancyConstants.DEFAULT_TENANT_ID).orElseThrow();
         assertThat(entry.eventType).isEqualTo(LifeDecisionEventType.COMPLETED);
         assertThat(entry.outcome).isEqualTo("appointment-confirmed");
     }
@@ -95,7 +96,7 @@ class LifeDecisionLedgerObserverTest {
         observer.onLifecycleEvent(completedEvent(legalWorkItemId, "filed-online"));
 
         var entry = (LegalActionLedgerEntry) ledgerRepository
-                .findLatestBySubjectId(legalWorkItemId).orElseThrow();
+                .findLatestBySubjectId(legalWorkItemId, TenancyConstants.DEFAULT_TENANT_ID).orElseThrow();
         assertThat(entry.eventType).isEqualTo(LifeDecisionEventType.COMPLETED);
         assertThat(entry.actionTaken).isEqualTo("filed-online");
     }
@@ -105,20 +106,20 @@ class LifeDecisionLedgerObserverTest {
         var wi = loadWorkItem(healthWorkItemId);
         var event = WorkItemLifecycleEvent.of("REJECTED", wi, "life-system", null);
         observer.onLifecycleEvent(event);
-        assertThat(ledgerRepository.findLatestBySubjectId(healthWorkItemId)).isEmpty();
+        assertThat(ledgerRepository.findLatestBySubjectId(healthWorkItemId, TenancyConstants.DEFAULT_TENANT_ID)).isEmpty();
     }
 
     @Test
     void onLifecycleEvent_skipsHouseholdDomain() {
         observer.onLifecycleEvent(completedEvent(householdWorkItemId, "done"));
-        assertThat(ledgerRepository.findLatestBySubjectId(householdWorkItemId)).isEmpty();
+        assertThat(ledgerRepository.findLatestBySubjectId(householdWorkItemId, TenancyConstants.DEFAULT_TENANT_ID)).isEmpty();
     }
 
     @Test
     void onLifecycleEvent_skipsWorkItemWithNoLifeTaskContext() {
         var orphanId = createBareWorkItem();
         observer.onLifecycleEvent(completedEvent(orphanId, "done"));
-        assertThat(ledgerRepository.findLatestBySubjectId(orphanId)).isEmpty();
+        assertThat(ledgerRepository.findLatestBySubjectId(orphanId, TenancyConstants.DEFAULT_TENANT_ID)).isEmpty();
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
@@ -179,7 +180,7 @@ class LifeDecisionLedgerObserverTest {
         var ctx = new SlaBreachContext(BreachType.COMPLETION_EXPIRED, breachedTask,
                 io.casehub.platform.api.path.Path.root(),
                 null);
-        return new SlaBreachEvent(ctx, new BreachDecision.Fail("deadline"));
+        return new SlaBreachEvent(ctx, new BreachDecision.Fail("deadline"), TenancyConstants.DEFAULT_TENANT_ID);
     }
 
     private WorkItemLifecycleEvent completedEvent(UUID workItemId, String outcome) {

@@ -41,7 +41,7 @@ class FinanceDomainLedgerHandlerTest {
     @Test void writeEntry_task_created_isNoOp() {
         UUID taskId = UUID.randomUUID();
         handler.writeEntry(LifeDecisionEventType.CREATED, taskId, new WorkItem());
-        verify(ledgerRepository, never()).save(any());
+        verify(ledgerRepository, never()).save(any(), any());
     }
 
     @Test void writeEntry_task_slaBreach_withRecord_savesEntry() {
@@ -60,13 +60,13 @@ class FinanceDomainLedgerHandlerTest {
             }
         };
 
-        when(ledgerRepository.findLatestBySubjectId(any())).thenReturn(Optional.empty());
-        when(ledgerRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerRepository.findLatestBySubjectId(any(), any())).thenReturn(Optional.empty());
+        when(ledgerRepository.save(any(), any())).thenAnswer(i -> i.getArgument(0));
 
         handler.writeEntry(LifeDecisionEventType.SLA_BREACH, taskId, workItem);
 
         ArgumentCaptor<LedgerEntry> captor = ArgumentCaptor.forClass(LedgerEntry.class);
-        verify(ledgerRepository).save(captor.capture());
+        verify(ledgerRepository).save(captor.capture(), any());
         assertInstanceOf(FinancialDecisionLedgerEntry.class, captor.getValue());
         FinancialDecisionLedgerEntry entry = (FinancialDecisionLedgerEntry) captor.getValue();
         assertEquals(LifeDecisionEventType.SLA_BREACH, entry.eventType);
@@ -87,13 +87,13 @@ class FinanceDomainLedgerHandlerTest {
             }
         };
 
-        when(ledgerRepository.findLatestBySubjectId(any())).thenReturn(Optional.empty());
-        when(ledgerRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerRepository.findLatestBySubjectId(any(), any())).thenReturn(Optional.empty());
+        when(ledgerRepository.save(any(), any())).thenAnswer(i -> i.getArgument(0));
 
         handler.writeEntry(LifeDecisionEventType.COMPLETED, taskId, new WorkItem());
 
         ArgumentCaptor<LedgerEntry> captor = ArgumentCaptor.forClass(LedgerEntry.class);
-        verify(ledgerRepository).save(captor.capture());
+        verify(ledgerRepository).save(captor.capture(), any());
         FinancialDecisionLedgerEntry entry = (FinancialDecisionLedgerEntry) captor.getValue();
         assertEquals(approver.toString(), entry.approvedBy);
         assertEquals(LifeDecisionEventType.COMPLETED, entry.eventType);
@@ -107,7 +107,7 @@ class FinanceDomainLedgerHandlerTest {
         };
 
         handler.writeEntry(LifeDecisionEventType.SLA_BREACH, UUID.randomUUID(), new WorkItem());
-        verify(ledgerRepository, never()).save(any());
+        verify(ledgerRepository, never()).save(any(), any());
     }
 
     @Test void writeEntry_commitment_created_savesEntry() {
@@ -116,13 +116,13 @@ class FinanceDomainLedgerHandlerTest {
         record.amountThreshold = BigDecimal.valueOf(1000);
         record.purchaseCategory = "contractor";
 
-        when(ledgerRepository.findLatestBySubjectId(any())).thenReturn(Optional.empty());
-        when(ledgerRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerRepository.findLatestBySubjectId(any(), any())).thenReturn(Optional.empty());
+        when(ledgerRepository.save(any(), any())).thenAnswer(i -> i.getArgument(0));
 
         handler.writeEntry(LifeDecisionEventType.CREATED, record);
 
         ArgumentCaptor<LedgerEntry> captor = ArgumentCaptor.forClass(LedgerEntry.class);
-        verify(ledgerRepository).save(captor.capture());
+        verify(ledgerRepository).save(captor.capture(), any());
         FinancialDecisionLedgerEntry entry = (FinancialDecisionLedgerEntry) captor.getValue();
         assertEquals(LifeDecisionEventType.CREATED, entry.eventType);
         assertEquals(BigDecimal.valueOf(1000), entry.amountThreshold);
@@ -134,13 +134,13 @@ class FinanceDomainLedgerHandlerTest {
         record.amountThreshold = BigDecimal.valueOf(750);
         record.purchaseCategory = "contractor";
 
-        when(ledgerRepository.findLatestBySubjectId(any())).thenReturn(Optional.empty());
-        when(ledgerRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerRepository.findLatestBySubjectId(any(), any())).thenReturn(Optional.empty());
+        when(ledgerRepository.save(any(), any())).thenAnswer(i -> i.getArgument(0));
 
         handler.writeEntry(LifeDecisionEventType.SLA_BREACH, record);
 
         ArgumentCaptor<LedgerEntry> captor = ArgumentCaptor.forClass(LedgerEntry.class);
-        verify(ledgerRepository).save(captor.capture());
+        verify(ledgerRepository).save(captor.capture(), any());
         FinancialDecisionLedgerEntry entry = (FinancialDecisionLedgerEntry) captor.getValue();
         assertEquals(LifeDecisionEventType.SLA_BREACH, entry.eventType);
     }

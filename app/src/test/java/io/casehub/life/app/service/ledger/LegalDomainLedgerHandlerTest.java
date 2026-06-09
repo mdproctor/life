@@ -50,7 +50,7 @@ class LegalDomainLedgerHandlerTest {
             }
         };
         handler.writeEntry(LifeDecisionEventType.COMPLETED, taskId, workItem);
-        verify(ledgerRepository, never()).save(any());
+        verify(ledgerRepository, never()).save(any(), any());
     }
 
     @Test void writeEntry_slaBreach_savesLegalEntry() {
@@ -70,13 +70,13 @@ class LegalDomainLedgerHandlerTest {
             }
         };
 
-        when(ledgerRepository.findLatestBySubjectId(any())).thenReturn(Optional.empty());
-        when(ledgerRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(ledgerRepository.findLatestBySubjectId(any(), any())).thenReturn(Optional.empty());
+        when(ledgerRepository.save(any(), any())).thenAnswer(i -> i.getArgument(0));
 
         handler.writeEntry(LifeDecisionEventType.SLA_BREACH, taskId, workItem);
 
         ArgumentCaptor<LedgerEntry> captor = ArgumentCaptor.forClass(LedgerEntry.class);
-        verify(ledgerRepository).save(captor.capture());
+        verify(ledgerRepository).save(captor.capture(), any());
         assertInstanceOf(LegalActionLedgerEntry.class, captor.getValue());
         LegalActionLedgerEntry entry = (LegalActionLedgerEntry) captor.getValue();
         assertEquals("File tax return", entry.legalObligation);

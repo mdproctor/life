@@ -1,6 +1,7 @@
 package io.casehub.life.app;
 
 import io.casehub.ledger.runtime.repository.LedgerEntryRepository;
+import io.casehub.platform.api.identity.TenancyConstants;
 import io.casehub.life.api.LifeActorType;
 import io.casehub.life.api.LifeDomain;
 import io.casehub.life.app.entity.ExternalActor;
@@ -57,7 +58,7 @@ class ExternalActorGdprResourceTest {
                 .when().delete("/external-actors/" + actorId + "/personal-data")
                 .then().statusCode(204);
 
-        var entry = ledgerRepository.findLatestBySubjectId(actorId).orElseThrow();
+        var entry = ledgerRepository.findLatestBySubjectId(actorId, TenancyConstants.DEFAULT_TENANT_ID).orElseThrow();
         assertThat(entry).isInstanceOf(io.casehub.life.app.ledger.ExternalActorErasureLedgerEntry.class);
         var erasure = (io.casehub.life.app.ledger.ExternalActorErasureLedgerEntry) entry;
         assertThat(erasure.erasedActorId).isEqualTo(actorId);

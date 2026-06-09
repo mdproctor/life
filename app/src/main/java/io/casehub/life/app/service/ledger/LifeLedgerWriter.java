@@ -6,6 +6,7 @@ import io.casehub.ledger.runtime.repository.LedgerEntryRepository;
 import io.casehub.life.app.entity.ExternalActor;
 import io.casehub.life.app.ledger.ExternalActorErasureLedgerEntry;
 import io.casehub.platform.api.identity.ActorType;
+import io.casehub.platform.api.identity.TenancyConstants;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -23,7 +24,7 @@ public class LifeLedgerWriter {
         entry.erasedActorId = actor.id;
         entry.contactMethod = actor.contactMethod;
         entry.erasedBy = erasedBy;
-        ledgerRepository.save(entry);
+        ledgerRepository.save(entry, TenancyConstants.DEFAULT_TENANT_ID);
     }
 
     private void populateBase(LedgerEntry entry, UUID subjectId,

@@ -6,6 +6,7 @@ import io.casehub.life.api.LifeDomain;
 import io.casehub.life.app.LifeDecisionEventType;
 import io.casehub.life.app.entity.LifeCommitmentRecord;
 import io.casehub.life.app.ledger.FinancialDecisionLedgerEntry;
+import io.casehub.platform.api.identity.TenancyConstants;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.work.runtime.model.WorkItem;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -57,7 +58,7 @@ public class FinanceDomainLedgerHandler implements DomainLedgerHandler {
         entry.purchaseCategory = record.purchaseCategory;
         entry.approvedBy       = event == LifeDecisionEventType.COMPLETED ? record.approvedBy : null;
         entry.eventType        = event;
-        ledgerRepository.save(entry);
+        ledgerRepository.save(entry, TenancyConstants.DEFAULT_TENANT_ID);
     }
 
     protected Optional<LifeCommitmentRecord> findRecord(UUID workItemId) {
