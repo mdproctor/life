@@ -155,7 +155,7 @@ public class FinancialReviewCaseHub extends YamlCaseHub {
      *   <li>Oversight decision received (after anomaly escalation)</li>
      * </ul>
      *
-     * <p>In production would call {@code LifeLedgerWriter.writeFinancialEntry()}.
+     * <p>In production would call {@code FinanceDomainLedgerHandler.writeEntry()}.
      */
     private Worker produceReportWorker() {
         return Worker.builder()

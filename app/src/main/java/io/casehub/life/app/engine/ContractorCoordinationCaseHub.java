@@ -145,7 +145,7 @@ public class ContractorCoordinationCaseHub extends YamlCaseHub {
      * <p>Stub captures the INTENT — the return map includes the data that would be
      * signaled to financial-review. In production this would:
      * <ol>
-     *   <li>Call {@code LifeLedgerWriter.writeFinancialEntry()}</li>
+     *   <li>Call {@code FinanceDomainLedgerHandler.writeEntry(SLA_BREACH/COMPLETED, record)}</li>
      *   <li>Query {@code LifeCaseTracker.findActiveByCaseType("financial-review")}</li>
      *   <li>For each active tracker, call {@code CaseHubRuntime.signal(tracker.engineCaseId, "contractorPayment", paymentData)}</li>
      * </ol>

@@ -26,7 +26,7 @@ public class LifeLedgerWriter {
         ledgerRepository.save(entry);
     }
 
-    public void populateBase(LedgerEntry entry, UUID subjectId,
+    private void populateBase(LedgerEntry entry, UUID subjectId,
                               String actorId, ActorType actorType, String actorRole) {
         entry.subjectId      = subjectId;
         entry.sequenceNumber = DomainLedgerHandler.nextSequenceNumber(ledgerRepository, subjectId);

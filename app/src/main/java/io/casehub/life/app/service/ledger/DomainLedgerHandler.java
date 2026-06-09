@@ -11,6 +11,8 @@ import java.util.UUID;
 public interface DomainLedgerHandler {
     LifeDomain domain();
 
+    // FINANCE: CREATED on this path is an explicit no-op — FINANCE CREATED entries are written
+    // via the commitment-based overload from OversightGateStrategy, not from task creation.
     void writeEntry(LifeDecisionEventType event, UUID workItemId, WorkItem workItem);
 
     default void writeEntry(LifeDecisionEventType event, LifeCommitmentRecord record) {
