@@ -1,5 +1,7 @@
 # casehub-life
 
+[![Build](https://github.com/casehubio/life/actions/workflows/publish.yml/badge.svg?branch=main)](https://github.com/casehubio/life/actions/workflows/publish.yml) [![Open PRs](https://img.shields.io/github/issues-pr/casehubio/life)](https://github.com/casehubio/life/pulls)
+
 Personal life automation on the CaseHub agentic harness — household coordination,
 health management, family obligations, and legal compliance with formal accountability.
 
