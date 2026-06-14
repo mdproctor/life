@@ -1054,7 +1054,7 @@ Integration tests re-enabled (engine#410 resolved — commit 66a6e34, life#23). 
 **Improvement refs:** 🔲
 **Completed:** 🔲 pending
 
-🔲 Full entry at C5 close. Blocked on Layer 6 implementation.
+🔲 Full entry at C5 close. Layer 6 implementation complete; entry pending epic close (life#7).
 
 #### What it adds
 
