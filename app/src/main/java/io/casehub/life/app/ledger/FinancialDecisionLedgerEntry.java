@@ -9,6 +9,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 @Entity
@@ -34,4 +35,16 @@ public class FinancialDecisionLedgerEntry extends LedgerEntry {
     @Enumerated(EnumType.STRING)
     @Column(name = "event_type", nullable = false, length = 30)
     public LifeDecisionEventType eventType;
+
+    @Override
+    protected byte[] domainContentBytes() {
+        return String.join("|",
+            workItemId != null ? workItemId.toString() : "",
+            oversightRef != null ? oversightRef.toString() : "",
+            amountThreshold != null ? amountThreshold.toPlainString() : "",
+            purchaseCategory != null ? purchaseCategory : "",
+            approvedBy != null ? approvedBy : "",
+            eventType != null ? eventType.name() : ""
+        ).getBytes(StandardCharsets.UTF_8);
+    }
 }

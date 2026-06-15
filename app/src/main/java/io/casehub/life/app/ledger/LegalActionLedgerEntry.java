@@ -8,6 +8,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -34,4 +35,16 @@ public class LegalActionLedgerEntry extends LedgerEntry {
 
     @Column(name = "action_taken", length = 255)
     public String actionTaken;
+
+    @Override
+    protected byte[] domainContentBytes() {
+        return String.join("|",
+            workItemId != null ? workItemId.toString() : "",
+            legalObligation != null ? legalObligation : "",
+            filingDeadline != null ? filingDeadline.toString() : "",
+            jurisdiction != null ? jurisdiction : "",
+            eventType != null ? eventType.name() : "",
+            actionTaken != null ? actionTaken : ""
+        ).getBytes(StandardCharsets.UTF_8);
+    }
 }
