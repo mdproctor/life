@@ -5,6 +5,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 @Entity
@@ -20,4 +21,13 @@ public class ExternalActorErasureLedgerEntry extends LedgerEntry {
 
     @Column(name = "erased_by", nullable = false, length = 255)
     public String erasedBy;
+
+    @Override
+    protected byte[] domainContentBytes() {
+        return String.join("|",
+            erasedActorId != null ? erasedActorId.toString() : "",
+            contactMethod != null ? contactMethod : "",
+            erasedBy != null ? erasedBy : ""
+        ).getBytes(StandardCharsets.UTF_8);
+    }
 }

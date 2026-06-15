@@ -8,6 +8,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -37,4 +38,17 @@ public class HealthDecisionLedgerEntry extends LedgerEntry {
 
     @Column(name = "outcome", length = 255)
     public String outcome;
+
+    @Override
+    protected byte[] domainContentBytes() {
+        return String.join("|",
+            workItemId != null ? workItemId.toString() : "",
+            providerId != null ? providerId.toString() : "",
+            appointmentDate != null ? appointmentDate.toString() : "",
+            taskCategory != null ? taskCategory : "",
+            slaDeadline != null ? slaDeadline.toString() : "",
+            eventType != null ? eventType.name() : "",
+            outcome != null ? outcome : ""
+        ).getBytes(StandardCharsets.UTF_8);
+    }
 }
