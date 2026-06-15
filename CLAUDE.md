@@ -216,7 +216,7 @@ Read these **before designing**, not after. The concern column tells you when ea
 | Assigning a migration version number | Domain migrations start at V100 (casehub-work occupies V1–V21+) |
 | Adding casehub-ledger to the classpath | PP-20260524-10efef — add `classpath:db/ledger/migration` to Flyway locations |
 | Adding casehub-qhorus to the classpath | Add `classpath:db/qhorus/migration` to Flyway locations |
-| Extending LedgerEntry (adding a tamper-evident subclass) | `casehub-ledger.md` Consumer Pattern section — JOINED inheritance, V2001+ migration |
+| Extending LedgerEntry (adding a tamper-evident subclass) | `casehub-ledger.md` Consumer Pattern section — JOINED inheritance, V2001+ migration. **Override `domainContentBytes()`** — join all persistent fields with `\|` separator, return as UTF-8 bytes. Build-time validator enforces this; test in same package (protected access). See `LedgerEntryDomainContentBytesTest`. |
 
 ### Testing
 
@@ -496,6 +496,8 @@ JAVA_HOME=/Library/Java/JavaVirtualMachines/graalvm-25.jdk/Contents/Home  # nati
 ```properties
 quarkus.arc.selected-alternatives=io.casehub.ledger.runtime.repository.jpa.JpaLedgerEntryRepository
 ```
+
+**CurrentPrincipal disambiguation:** when a foundation SNAPSHOT introduces a new `@Default CurrentPrincipal` bean (e.g. `QhorusInboundCurrentPrincipal`), add it to `quarkus.arc.exclude-types` in both `application.properties` (production) and `test/resources/application.properties` (tests). Production keeps `TenantScopedPrincipal` (@RequestScoped); tests exclude `TenantScopedPrincipal` so `DefaultTestPrincipal` wins (provides canonical tenancyId `278776f9-e1b0-46fb-9032-8bddebdcf9ce`). `DefaultTestPrincipal` is not `@Alternative` — never add it to `selected-alternatives`.
 
 ---
 
