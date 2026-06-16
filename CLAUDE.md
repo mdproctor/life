@@ -226,7 +226,7 @@ Read these **before designing**, not after. The concern column tells you when ea
 | Testing SPI wiring | `spi-testing-alternative-inner-classes` protocol |
 | Testing a WorkItem SLA | WorkItem test patterns in `casehub-work.md` |
 | Seeding WorkItemTemplates in tests | Flyway is disabled in tests (`migrate-at-start=false`). Seed templates via `LifeTestFixtures.seedStandardTemplates()` and/or `LifeTestFixtures.seedEscalationTemplate()` from `@BeforeEach @Transactional`. Canonical UUIDs 001–004; idempotency guard by template name. **Always set `tenancyId` to `"278776f9-e1b0-46fb-9032-8bddebdcf9ce"` — V35 adds NOT NULL with no H2 default.** See `app/src/test/java/io/casehub/life/app/LifeTestFixtures.java`. |
-| Non-JPA plain SQL tables in H2 tests | Hibernate `drop-and-create` only creates JPA entity tables. Plain SQL tables (e.g. `ledger_subject_sequence`) must be created via `quarkus.hibernate-orm."<pu>".sql-load-script` pointing to a SQL file with `CREATE TABLE IF NOT EXISTS`. See `app/src/test/resources/import-qhorus.sql` and PP-20260609-e2c3a1. |
+| Non-JPA plain SQL tables in H2 tests | Hibernate `drop-and-create` only creates JPA entity tables. Plain SQL tables (e.g. `ledger_subject_sequence`) must be created via `quarkus.hibernate-orm."<pu>".sql-load-script` pointing to a SQL file with `CREATE TABLE IF NOT EXISTS`. See `app/src/test/resources/import-qhorus.sql` and PP-20260609-e2c3a1. **When the ledger SNAPSHOT changes `ledger_subject_sequence` schema** (e.g. adding `tenancy_id` column in composite PK), update `import-qhorus.sql` to match — mismatch causes "Column not found" HTTP 500 on any ledger write. |
 | Testing async CDI observers | Call the observer method directly through the injected CDI proxy — bypasses event dispatch and debounce. Method-level `@Transactional(REQUIRES_NEW)` is honoured via CDI proxy. Do NOT use `@TestTransaction` on the test method — it blocks the REQUIRES_NEW from seeing committed setup records. See GE-20260529-9f3557 and `LifeWatchdogAlertObserverTest`. |
 | Testing ledger writers (unit) | Mock `LedgerEntryRepository` with Mockito. Do NOT assert on `entry.id` or `entry.occurredAt` — these are set by `LedgerEntry.@PrePersist` which is bypassed in mocked tests. See `LifeLedgerWriterTest`. |
 | Multi-PU entity package placement | Ledger subclass entities must NOT be sub-packages of `io.casehub.life.app.entity` (default PU). Use `io.casehub.life.app.ledger` — Quarkus uses prefix matching for PU assignment; sub-packages of a default-PU package get assigned to the default PU, causing cross-PU association errors with `LedgerEntry.supplements`. |
@@ -492,9 +492,11 @@ JAVA_HOME=/Library/Java/JavaVirtualMachines/graalvm-25.jdk/Contents/Home  # nati
 - Add `classpath:db/qhorus/migration` when casehub-qhorus is active
 - Qhorus PU packages must use `io.casehub.ledger.runtime` (broad) — NOT `io.casehub.ledger.runtime.model` (misses `LedgerSupplement` sub-package)
 
-**CDI wiring:** `JpaLedgerEntryRepository` is `@Alternative`. Add to `application.properties`:
+**CDI wiring:** `JpaLedgerEntryRepository` and `JpaActorTrustScoreRepository` are both `@Alternative`. The corresponding `@Default` beans (`NoOpLedgerEntryRepository`, `NoOpActorTrustScoreRepository`) are silent no-ops — omitting either JPA bean from `selected-alternatives` causes ledger writes and trust score reads to silently do nothing. Add both to `application.properties`:
 ```properties
-quarkus.arc.selected-alternatives=io.casehub.ledger.runtime.repository.jpa.JpaLedgerEntryRepository
+quarkus.arc.selected-alternatives=\
+  io.casehub.ledger.runtime.repository.jpa.JpaLedgerEntryRepository,\
+  io.casehub.ledger.runtime.repository.jpa.JpaActorTrustScoreRepository
 ```
 
 **CurrentPrincipal disambiguation:** when a foundation SNAPSHOT introduces a new `@Default CurrentPrincipal` bean (e.g. `QhorusInboundCurrentPrincipal`), add it to `quarkus.arc.exclude-types` in both `application.properties` (production) and `test/resources/application.properties` (tests). Production keeps `TenantScopedPrincipal` (@RequestScoped); tests exclude `TenantScopedPrincipal` so `DefaultTestPrincipal` wins (provides canonical tenancyId `278776f9-e1b0-46fb-9032-8bddebdcf9ce`). `DefaultTestPrincipal` is not `@Alternative` — never add it to `selected-alternatives`.
