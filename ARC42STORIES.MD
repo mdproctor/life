@@ -1045,20 +1045,30 @@ Integration tests re-enabled (engine#410 resolved — commit 66a6e34, life#23). 
 ### Layer — Trust routing
 
 **Participates in chapters:** C5, C6
-**Architectural patterns:** 🔲 at Layer 6 close
-**Key protocols:** 🔲 at Layer 6 close
-**Design refs:** 🔲 at Layer 6 close
+**Architectural patterns:** Bayesian Beta trust scoring delegated to casehub-ledger (`ActorTrustScore`, `TrustGateService`); life provides routing policy via `TrustRoutingPolicyProvider` SPI + YAML overlay; attestation pipeline writes `LedgerAttestation` records from WorkItem outcomes.
+**Key protocols:** PP-20260524-a8f597 (platform scope), `trust-routing.yaml` (YAML blend factors + quality floors per domain)
+**Design refs:** `docs/specs/life-automation.md` §trust-dimensions, `docs/specs/life-actor-model.md`
 **Issues:** casehubio/life#7
 **Navigation:** `git log --grep="#7" --oneline`
-**Blog:** 🔲
-**Improvement refs:** 🔲
-**Completed:** 🔲 pending
-
-🔲 Full entry at C5 close. Layer 6 implementation complete; entry pending epic close (life#7).
+**Blog:** `blog/2026-06-16-mdp01-snapshot-silent-alternatives.md`
+**Improvement refs:** Single-candidate limitation until Layer 7 (OpenClaw WorkerProvisioner); RBAC-differentiated thresholds deferred to life#26
+**Completed:** 2026-06-16
 
 #### What it adds
 
-Trust-weighted agent routing by household domain. `ActorTrustScore` updated from WorkItem outcomes and commitment attestations (Bayesian Beta). Routing selects the agent with the highest domain-specific trust score — deadline-reliability for contractor tasks, cost-accuracy for finance, factual-accuracy for health.
+Trust-weighted agent routing by household domain. `ActorTrustScore` updated from WorkItem outcomes via Bayesian Beta scoring in casehub-ledger. Routing selects the agent with the highest domain-specific trust score — `deadline-reliability` for contractor tasks, `cost-accuracy` for finance, `factual-accuracy` for health.
+
+Life's contribution:
+
+- `LifeOutcomeAttestationWriter` — converts WorkItem outcomes (COMPLETED → SOUND, SLA_BREACH → FLAGGED) and `deadline-reliability` dimension scores into `LedgerAttestation` records. Capability tag resolved from `LifeTaskContext.domain` or WorkItem scope path.
+- `LifeTrustRoutingPolicyProvider` — `TrustRoutingPolicyProvider` SPI with 8 domain routing policies. Capability index built dynamically at `@PostConstruct` from `LifeDomainDescriptor.workerCapabilities()` — no static maps. YAML overlay (blend factors, quality floors) applied per domain scope.
+- `trust-routing.yaml` — 8 domain scopes; blend factors range from 0.40 (household, family scheduling) to 0.80 (legal deadline); quality floors enforce minimum scores on specific trust dimensions.
+- `TrustProfile` on `ExternalActorResponse` — ledger-backed global score, dimension scores, and capability scores exposed via REST. Score computed by `TrustGateService` (casehub-ledger) from `MaterializedTrustScoreSource` → `JpaActorTrustScoreRepository`.
+- `LifeActorIds` — `life-actor:{uuid}` convention mapping ExternalActor UUIDs to ledger actor IDs.
+
+**Design decision:** Bayesian Beta computation and materialized score tables are fully owned by casehub-ledger. Life only writes attestations and reads scores — it has no scoring logic of its own. This boundary prevents duplication and keeps trust computation consistent across all CaseHub applications.
+
+**Single-candidate limitation:** FuncDSL workers are trivial stubs — all routing decisions are single-candidate until Layer 7 adds OpenClaw WorkerProvisioner. Trust routing infrastructure is fully wired and ready; routing decisions become meaningful when real skill implementations compete.
 
 ---
 
