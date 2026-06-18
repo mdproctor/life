@@ -236,6 +236,8 @@ Read these **before designing**, not after. The concern column tells you when ea
 | Testing `ActionRiskClassifier` | Unit tests: mock `PreferenceProvider`, use `lenient().when(...)` in `@BeforeEach` for shared stubs — NEVER/unknown types skip `resolve()` entirely, triggering `UnnecessaryStubbingException` in strict mode. `@QuarkusTest`: inject `@RiskClassifier Instance<ActionRiskClassifier>` to verify CDI qualifier wiring. See `LifeActionRiskClassifierTest`, `LifeActionRiskClassifierQuarkusTest`. |
 | Testing `HumanTaskTarget.candidateGroups()` | Returns sealed `ListEvaluator`. Pattern: `ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("group-name")`. Import `io.casehub.api.model.evaluator.ListEvaluator`. |
 | Engine CDI wiring | `quarkus.arc.selected-alternatives` must include `MemorySubCaseGroupRepository`, `MemoryPlanItemStore`, `MemoryReactivePlanItemStore` from casehub-engine-persistence-memory (GE-20260531-1e51d4). |
+| Testing LLM-backed workers (`AppointmentCycleCaseHub`) | Use `@Alternative @Priority(10) @ApplicationScoped` test CDI bean (e.g. `TestLifeOpenClawChatModelProvider`) registered in `quarkus.arc.selected-alternatives` in test config. **Never use `@InjectMock`** for beans used in `augment()` — Mockito's CDI proxy reset between test classes triggers a Quarkus restart, re-registering Vert.x codecs and failing ALL subsequent `@QuarkusTest` classes (engine#536). The test bean must be request-aware: detect the rendered user message text to serve correct responses for both success and decline paths. `augmentedDefinition` is baked once per JVM lifetime — whichever test class runs first bakes the ChatModel. See `TestLifeOpenClawChatModelProvider`. |
+| @QuarkusTest status (2026-06-18) | All `@QuarkusTest` classes currently skip due to pre-existing Quarkus augmentation phase bug: `BlackboardEventCodecRegistrar.onStart()` registers Vert.x codecs during augmentation, then fails when the application tries to start again for tests. Filed as engine#536. Unit tests and non-Quarkus tests pass. |
 | Engine-ledger PU packages | `io.casehub.ledger.model` must be in the qhorus PU packages — this is `casehub-engine-ledger`'s entity package (e.g. `WorkerDecisionEntry`, `CaseLedgerEntry`), distinct from `io.casehub.ledger.runtime` (casehub-ledger base). Without it: `Unknown entity type 'WorkerDecisionEntry' does not belong to this persistence unit`. |
 | SubCase M-of-N in YAML | M-of-N fields (groupId, totalInGroup, requiredCount) are DSL-only — not YAML-supported. Add via Java augmentation in YamlCaseHub.getDefinition() (GE-20260531-d896bf). |
 
@@ -287,6 +289,27 @@ Note: `HouseholdTask`, `LifeGoal`, `LifeEvent` were removed in Layer 2 — they 
 - `trust-routing.yaml` — YAML config at `casehub/life/trust-routing.yaml` for blend factors and quality floors per domain.
 - `TrustProfile` — nested record on `ExternalActorResponse` enriched from `TrustGateService` (globalScore, dimensionScores, capabilityScores).
 - ActorId convention: `life-actor:{uuid}` for ExternalActor behaviour in ledger entries; `"life-system"` for system actions.
+
+**Layer 7 additions (partial — AgentExec wiring, life#25):**
+- `LifeOpenClawChatModelProvider` — `app/engine/agent/` `@ApplicationScoped ChatModelProvider`; targets
+  OpenClaw's `/v1/chat/completions` via reflection on `OpenAiChatModel.builder()`. Temporary pending
+  casehubio/engine#527 (add `baseUrl` to `OpenAiChatModelProvider` in engine-api). Config:
+  `casehub.life.openclaw.api-url` (required, no default), `casehub.life.openclaw.api-key` (default "no-key"),
+  `casehub.life.openclaw.timeout-seconds` (default 120). chatModelProvider.get() called once per JVM lifetime.
+- `BookingResult` — `app/engine/agent/` Java record; structured output schema for the booking agent.
+  `AgentBuilder.responseSchema(BookingResult.class)` derives the JSON schema.
+- `OpenClawHealthProbe` — `app/engine/agent/` `@IfBuildProfile("prod") @ApplicationScoped`; fires TCP
+  connectivity probe on `casehub.life.openclaw.api-url` at startup. Suppressed in tests and dev mode.
+- `TestLifeOpenClawChatModelProvider` (src/test only) — `@Alternative @Priority(10) @ApplicationScoped`;
+  returns a request-aware `ChatModel` (detects "unavailable" in rendered user message → decline path).
+  Registered via `quarkus.arc.selected-alternatives` in test config. Avoids `@InjectMock` which causes
+  Quarkus CDI restart between test classes and re-registers blackboard event bus codecs (engine#536).
+- `casehub.life.tenancy-id` — required config property (no default); must be set in deployment environment
+  (absent from production `application.properties`; present in test config with canonical test UUID).
+- `langchain4j-open-ai 1.14.1` — added as `runtime` dep in `app/pom.xml`.
+- AgentDescriptor convention: `{model-family}:{persona}@{major}` per `docs/specs/life-actor-model.md`.
+  Example: `"openclaw:health-agent@1"`. Must match casehub-openclaw-casehub config map key when
+  WorkerProvisioner is wired (life#37).
 
 **Layer 7 additions (partial — risk classification):**
 - `HouseholdActionType` — `api/` enum: 11 action types, `GatePolicy` (ALWAYS/AMOUNT_THRESHOLD/NEVER),
@@ -423,6 +446,17 @@ Layer 7 (partial): Action risk classification — LifeActionRiskClassifier inter
          blocked on auth retrofit). Full Layer 7 = + casehub-openclaw as WorkerProvisioner.
          ✅ COMPLETE (risk classification)  🔲 PENDING (OpenClaw integration)
 
+Layer 7 (partial — AgentExec wiring): First real LLM-backed worker (life#25). Establishes
+         WorkerFunction.AgentExec(Agent) pattern for OpenClaw /v1/chat/completions. Components:
+         `LifeOpenClawChatModelProvider` (@ApplicationScoped, temporary pending engine#527),
+         `BookingResult` (structured output schema), `OpenClawHealthProbe` (@IfBuildProfile("prod")
+         TCP probe), `TestLifeOpenClawChatModelProvider` (@Alternative @Priority(10) CDI test bean).
+         AgentDescriptor.agentId = "openclaw:health-agent@1" per {model-family}:{persona}@{major}
+         convention. Protocol: docs/protocols/casehub-life/openclaw-agent-worker-pattern.md.
+         engine#536 filed (BlackboardEventCodecRegistrar idempotency — all @QuarkusTest currently
+         skip due to pre-existing codec double-registration in augmentation phase).
+         ✅ COMPLETE (AgentExec wiring)  🔲 PENDING (WorkerProvisioner / /hooks/agent — life#37, life#38)
+
 Layer 7 (full): + casehub-openclaw — OpenClaw as WorkerProvisioner; skill ecosystem (banking APIs,
          calendar integration, Home Assistant, messaging).
 ```
@@ -454,7 +488,14 @@ Layer 7 (full): + casehub-openclaw — OpenClaw as WorkerProvisioner; skill ecos
 - **auth-retrofit-readiness.md** — auth not yet wired to internal services; design for retrofit
 - **alternative-extension-patterns.md** — `@Alternative` CDI patterns for SPI wiring
 - **PP-20260518-case-definition-layers** — YAML and fluent Java DSL are paired, equal authoring paths; every YAML must have a DSL companion
-- **PP-20260531-worker-func-exec** — FuncWorkflowBuilder required for workers with multi-step structure, retry needs, or error handling. Single-step stub workers returning hardcoded maps (pending OpenClaw replacement at Layer 7) are exempt — migrate when real workers land. Design gap logged as engine#463 (function-as-worker abstraction). Raw `WorkerResult.of(map)` stubs stay until engine#463 resolves.
+- **PP-20260531-worker-func-exec** (superseded for LLM workers by PP-20260618-openclaw-agent) —
+  engine#463 settled: single LLM call → `Worker.builder().function(Agent.builder()...build())` (AgentExec);
+  multi-step durable → `FuncWorkflowBuilder` or YAML workflow (Flow); stub / in-process → Sync lambda.
+  FuncWorkflowBuilder is still correct for genuine multi-step workers with retry/branching.
+  Raw `WorkerResult.of(map)` stubs remain for non-health workers until Layer 7 full lands.
+- **PP-20260618-openclaw-agent** — WorkerFunction.AgentExec(Agent) + AgentDescriptor required for LLM-backed
+  workers; agentId = {model-family}:{persona}@{major}; responseSchema required; config changes require restart.
+  See docs/protocols/casehub-life/openclaw-agent-worker-pattern.md.
 - **PP-20260529-3ffe28** — three-phase case start: never join() inside @Transactional
 
 ---
