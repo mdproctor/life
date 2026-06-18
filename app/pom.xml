@@ -192,6 +192,20 @@
       <scope>test</scope>
     </dependency>
 
+    <!--
+      langchain4j-open-ai: runtime dep for LifeOpenClawChatModelProvider.
+      OpenAiChatModel is loaded via reflection at runtime; langchain4j (base API)
+      is already on the compile classpath transitively via casehub-engine-api.
+      Pending casehubio/engine#527 (add baseUrl to OpenAiChatModelProvider) — once
+      that lands, this dep and LifeOpenClawChatModelProvider are deleted.
+    -->
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-open-ai</artifactId>
+      <version>1.14.1</version><!-- matches version.dev.langchain4j in casehub-engine parent -->
+      <scope>runtime</scope>
+    </dependency>
+
   </dependencies>
 
   <build>

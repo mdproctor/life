@@ -15,25 +15,30 @@
  */
 package io.casehub.life.app.engine;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.casehub.api.model.HumanTaskTarget;
 import io.casehub.api.model.evaluator.JQExpressionEvaluator;
+import io.casehub.api.model.evaluator.ListEvaluator;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
-import io.casehub.api.model.evaluator.ListEvaluator;
 
 /**
  * Unit-level integration test for the appointment-cycle CaseHub definition.
  *
  * <p>Verifies that the YAML loads correctly and the augmented workers are present.
  * Does not start a case — that is covered by {@link AppointmentCycleIntegrationTest}.
+ *
+ * <p>TestLifeOpenClawChatModelProvider is active via quarkus.arc.selected-alternatives.
+ * This avoids @InjectMock which would force a Quarkus CDI restart between test classes,
+ * causing codec re-registration failures (BlackboardEventCodecRegistrar).
  */
 @QuarkusTest
 class AppointmentCycleCaseHubTest {
@@ -101,5 +106,26 @@ class AppointmentCycleCaseHubTest {
                 "book-appointment-agent", "find-alternative-agent",
                 "confirm-appointment-agent", "pre-visit-prep-agent",
                 "record-health-decision-agent"), names);
+    }
+
+    @Test
+    void bookAppointmentWorkerHasAgentDescriptor() {
+        // Worker.Builder.build() does not enforce agentDescriptor — it is silently nullable.
+        // This test enforces the architectural requirement: every LLM-backed worker must
+        // carry an AgentDescriptor so the trust system and attestation pipeline can
+        // attribute outcomes to the correct agent.
+        final var worker = caseHub.getDefinition().getWorkers().stream()
+                .filter(w -> "book-appointment-agent".equals(w.getName()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("book-appointment-agent not found"));
+
+        assertThat(worker.agentDescriptor())
+                .as("book-appointment-agent must carry an AgentDescriptor")
+                .isNotNull();
+        assertThat(worker.agentDescriptor().agentId())
+                .as("agentId must follow {model-family}:{persona}@{major} convention")
+                .isEqualTo("openclaw:health-agent@1");
+        assertThat(worker.agentDescriptor().provider()).isEqualTo("openclaw");
+        assertThat(worker.agentDescriptor().slot()).isEqualTo("casehubio/life/health");
     }
 }
