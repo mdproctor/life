@@ -20,25 +20,42 @@ import io.casehub.api.model.Capability;
 import io.casehub.api.model.CaseDefinition;
 import io.casehub.api.model.Worker;
 import io.casehub.api.model.WorkerResult;
+import io.casehub.api.model.ai.Agent;
+import io.casehub.eidos.api.AgentDescriptor;
+import io.casehub.life.app.engine.agent.BookingResult;
+import io.casehub.life.app.engine.agent.LifeOpenClawChatModelProvider;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.List;
 import java.util.Map;
 
 /**
- * Appointment cycle case hub — loads the YAML definition and augments it with
- * in-process worker functions.
+ * Appointment cycle case hub — loads the YAML definition and augments it with workers.
  *
- * <p>Workers are lambda functions that run on Quartz worker threads. The humanTask
- * binding (attend-and-record) is defined in YAML and handled by
+ * <p>book-appointment-agent is the first real LLM-backed worker (casehubio/life#25):
+ * it uses WorkerFunction.AgentExec(Agent) with OpenClaw's /v1/chat/completions as the
+ * LLM backend. Agent identity follows the {model-family}:{persona}@{major} convention
+ * from docs/specs/life-actor-model.md. Refs engine#463 (settled function-as-worker design).
+ *
+ * <p>All other workers remain stubs (WorkerFunction.Sync lambdas) until full Layer 7 lands.
+ *
+ * <p>The humanTask binding (attend-and-record) is defined in YAML and handled by
  * {@link io.casehub.workadapter.HumanTaskScheduleHandler} — no Java worker needed.
  *
- * <p>DECLINE pattern: the book-appointment worker returns {@code {declined: true}} when the
- * provider is "unavailable". The find-alternative binding fires on decline and returns a
- * successful alternative booking. Refs casehub-life#6.
+ * <p>augmentedDefinition is baked exactly once per JVM lifetime (double-checked lock).
+ * chatModelProvider.get() is called once during Agent.build() in augment(). Config changes
+ * to casehub.life.openclaw.* require a restart.
  */
 @ApplicationScoped
 public class AppointmentCycleCaseHub extends YamlCaseHub {
+
+    @Inject
+    LifeOpenClawChatModelProvider openClaw;
+
+    @ConfigProperty(name = "casehub.life.tenancy-id")
+    String tenancyId;
 
     private volatile CaseDefinition augmentedDefinition;
 
@@ -58,7 +75,7 @@ public class AppointmentCycleCaseHub extends YamlCaseHub {
         return augmentedDefinition;
     }
 
-    private CaseDefinition augment(CaseDefinition yaml) {
+    private CaseDefinition augment(final CaseDefinition yaml) {
         yaml.getWorkers().addAll(List.of(
                 bookAppointmentWorker(),
                 findAlternativeWorker(),
@@ -69,40 +86,66 @@ public class AppointmentCycleCaseHub extends YamlCaseHub {
         return yaml;
     }
 
-    private static Capability cap(String name) {
+    private static Capability cap(final String name) {
         return Capability.builder().name(name).inputSchema(".").outputSchema(".").build();
     }
 
     /**
-     * Books an appointment. Returns {@code {declined: true}} when provider is "unavailable"
-     * to demonstrate the DECLINE recovery path.
+     * Books an appointment via OpenClaw's LLM API (/v1/chat/completions).
+     *
+     * <p>First real LLM-backed worker in casehub-life. Uses WorkerFunction.AgentExec(Agent)
+     * per the engine#463 settled abstraction. OpenClaw returns structured JSON conforming
+     * to BookingResult — confirmed=false indicates a PENDING booking; the confirm-appointment
+     * binding fires when .booking != null and .booking.declined != true.
+     *
+     * <p>AgentDescriptor.agentId "openclaw:health-agent@1" follows the
+     * {model-family}:{persona}@{major} convention. This value MUST match the
+     * casehub-openclaw-casehub config map key when WorkerProvisioner is wired (life#37).
      */
     private Worker bookAppointmentWorker() {
+        final Agent bookingAgent = Agent.builder()
+                .model(openClaw)
+                .systemPrompt("""
+                        You are a healthcare appointment booking agent for a UK household.
+                        Book medical appointments with the requested provider.
+                        If the provider is unavailable, set declined=true and provide a reason.
+                        Respond with valid JSON only — no prose, no explanation.
+                        """)
+                .userMessage("Book a {{appointmentType}} appointment with provider {{provider}}.")
+                .responseSchema(BookingResult.class)
+                .build();
+
+        final AgentDescriptor descriptor = new AgentDescriptor(
+                "openclaw:health-agent@1",    // agentId — MUST match provisioner config key (life#37)
+                "OpenClaw Health Agent",       // name
+                "1",                           // version
+                "openclaw",                    // provider
+                "openclaw",                    // modelFamily
+                null,                          // modelVersion — unknown
+                null,                          // weightsFingerprint
+                null,                          // domainVocabulary
+                null,                          // slotVocabulary
+                null,                          // dispositionVocabulary
+                null,                          // axisVocabularies
+                "casehubio/life/health",       // slot — matches scope path convention
+                List.of(),                     // capabilities (populated when skill manifest available)
+                null,                          // disposition
+                "GB",                          // jurisdiction
+                null,                          // dataHandlingPolicy
+                tenancyId,                     // tenancyId — required, injected from config
+                "Health domain booking and follow-up agent"  // briefing
+        );
+
         return Worker.builder()
                 .name("book-appointment-agent")
                 .capabilities(List.of(cap("book-appointment")))
-                .function((Map<String, Object> input) -> {
-                    String provider = input.get("provider") != null
-                            ? String.valueOf(input.get("provider")) : "";
-                    if ("unavailable".equalsIgnoreCase(provider)) {
-                        return WorkerResult.of(Map.of(
-                                "declined", true,
-                                "reason", "Provider not accepting new patients"
-                        ));
-                    }
-                    return WorkerResult.of(Map.of(
-                            "appointmentId", "APT-" + System.currentTimeMillis(),
-                            "provider", provider,
-                            "confirmed", false
-                    ));
-                })
+                .function(bookingAgent)
+                .agentDescriptor(descriptor)
                 .build();
     }
 
-    /**
-     * Finds an alternative provider after a decline. Always succeeds in stubs.
-     */
-    private Worker findAlternativeWorker() {
+    /** Finds an alternative provider after a decline. Stub — pending Layer 7. */
+    private static Worker findAlternativeWorker() {
         return Worker.builder()
                 .name("find-alternative-agent")
                 .capabilities(List.of(cap("find-alternative")))
@@ -115,10 +158,8 @@ public class AppointmentCycleCaseHub extends YamlCaseHub {
                 .build();
     }
 
-    /**
-     * Sends appointment confirmation and reminder.
-     */
-    private Worker confirmAppointmentWorker() {
+    /** Sends appointment confirmation and reminder. Stub — pending Layer 7. */
+    private static Worker confirmAppointmentWorker() {
         return Worker.builder()
                 .name("confirm-appointment-agent")
                 .capabilities(List.of(cap("confirm-appointment")))
@@ -129,10 +170,8 @@ public class AppointmentCycleCaseHub extends YamlCaseHub {
                 .build();
     }
 
-    /**
-     * Sends pre-visit checklist and preparation instructions.
-     */
-    private Worker preVisitPrepWorker() {
+    /** Sends pre-visit checklist and preparation instructions. Stub — pending Layer 7. */
+    private static Worker preVisitPrepWorker() {
         return Worker.builder()
                 .name("pre-visit-prep-agent")
                 .capabilities(List.of(cap("pre-visit-prep")))
@@ -143,11 +182,8 @@ public class AppointmentCycleCaseHub extends YamlCaseHub {
                 .build();
     }
 
-    /**
-     * Records health decision to tamper-evident ledger (stub — in production would
-     * call LifeLedgerWriter).
-     */
-    private Worker recordHealthDecisionWorker() {
+    /** Records health decision to tamper-evident ledger. Stub — pending Layer 7. */
+    private static Worker recordHealthDecisionWorker() {
         return Worker.builder()
                 .name("record-health-decision-agent")
                 .capabilities(List.of(cap("record-health-decision")))
