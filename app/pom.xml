@@ -146,6 +146,12 @@
       <groupId>io.casehub</groupId>
       <artifactId>casehub-platform-config</artifactId>
     </dependency>
+    <!-- OidcCurrentPrincipal @RequestScoped — displaces TenantScopedPrincipal + MockCurrentPrincipal;
+         brings quarkus-oidc transitively. CDI wiring: see life#40 spec §2. -->
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-platform-oidc</artifactId>
+    </dependency>
 
     <!-- ================================================================ -->
     <!-- Test                                                              -->
@@ -153,6 +159,12 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-junit</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- @TestSecurity — controls SecurityIdentity in @QuarkusTest without a real OIDC server -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-test-security</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
