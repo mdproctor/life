@@ -16,11 +16,21 @@
 package io.casehub.life.app.engine;
 
 import io.casehub.api.engine.YamlCaseHub;
-import io.casehub.api.model.Capability;
 import io.casehub.api.model.CaseDefinition;
-import io.casehub.api.model.Worker;
-import io.casehub.api.model.WorkerResult;
+import io.casehub.api.model.ai.Agent;
+import io.casehub.eidos.api.AgentDescriptor;
+import io.casehub.life.app.engine.agent.JobMonitoringResult;
+import io.casehub.life.app.engine.agent.LifeOpenClawChatModelFactory;
+import io.casehub.life.app.engine.agent.QuoteReceivedResult;
+import io.casehub.life.app.engine.agent.RecordPaymentResult;
+import io.casehub.life.app.engine.agent.RequestQuoteResult;
+import io.casehub.life.app.engine.agent.WatchdogEscalationResult;
+import io.casehub.api.model.AgentWorkerFunction;
+import io.casehub.worker.api.Capability;
+import io.casehub.worker.api.Worker;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.List;
 import java.util.Map;
@@ -45,6 +55,12 @@ import java.util.Map;
  */
 @ApplicationScoped
 public class ContractorCoordinationCaseHub extends YamlCaseHub {
+
+    @Inject
+    LifeOpenClawChatModelFactory openClawFactory;
+
+    @ConfigProperty(name = "casehub.life.tenancy-id")
+    String tenancyId;
 
     private volatile CaseDefinition augmentedDefinition;
 
@@ -72,6 +88,7 @@ public class ContractorCoordinationCaseHub extends YamlCaseHub {
                 jobMonitoringWorker(),
                 recordPaymentWorker()
         ));
+        yaml.setAgentDescriptors(Map.of("openclaw:home-agent@1", homeDescriptor()));
         return yaml;
     }
 
@@ -80,86 +97,135 @@ public class ContractorCoordinationCaseHub extends YamlCaseHub {
     }
 
     /**
-     * Issues a qhorus COMMAND on case-{caseId}/contractor-quote requesting a quote.
-     * Stub returns quoteRequested flag with channel info.
+     * Requests a quote from the contractor.
+     *
+     * <p>Uses OpenClaw's LLM API to request a quote from the contractor via
+     * the appropriate messaging channel.
      */
     private Worker requestQuoteWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("home-agent"))
+                .systemPrompt("""
+                        You are a contractor coordination agent. Request a quote from the
+                        contractor via the appropriate messaging channel.""")
+                .responseSchema(RequestQuoteResult.class)
+                .build();
+
         return Worker.builder()
                 .name("request-quote-agent")
                 .capabilities(List.of(cap("request-quote")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "quoteRequested", true,
-                        "channel", "case-stub/contractor-quote",
-                        "deadlinePassed", false
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
-     * Sends escalation reminder when quote deadline has passed. Adaptive — only fires
-     * when {@code .quoteRequest.deadlinePassed == true}.
+     * Escalates an overdue contractor commitment.
+     *
+     * <p>Uses OpenClaw's LLM API to escalate an overdue contractor commitment
+     * by sending a reminder.
      */
     private Worker watchdogEscalationWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("home-agent"))
+                .systemPrompt("""
+                        You are a contractor coordination agent. Escalate an overdue
+                        contractor commitment by sending a reminder.""")
+                .responseSchema(WatchdogEscalationResult.class)
+                .build();
+
         return Worker.builder()
                 .name("watchdog-escalation-agent")
                 .capabilities(List.of(cap("watchdog-escalation")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "escalated", true,
-                        "reminderSent", true
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
-     * Processes the received quote from contractor RESPONSE via QhorusMessageSignalBridge.
+     * Processes a received quote from the contractor.
+     *
+     * <p>Uses OpenClaw's LLM API to process a received quote, extracting amount,
+     * contractor details, and validity period.
      */
     private Worker quoteReceivedWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("home-agent"))
+                .systemPrompt("""
+                        You are a contractor coordination agent. Process a received quote,
+                        extracting amount, contractor details, and validity period.""")
+                .responseSchema(QuoteReceivedResult.class)
+                .build();
+
         return Worker.builder()
                 .name("quote-received-agent")
                 .capabilities(List.of(cap("quote-received")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "quoteAmount", 2500,
-                        "contractor", "ABC Services",
-                        "validUntil", "2026-07-15"
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
-     * Monitors job progress after quote approved.
+     * Monitors an active contractor job.
+     *
+     * <p>Uses OpenClaw's LLM API to monitor an active contractor job and
+     * report progress.
      */
     private Worker jobMonitoringWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("home-agent"))
+                .systemPrompt("""
+                        You are a contractor coordination agent. Monitor an active contractor
+                        job and report progress.""")
+                .responseSchema(JobMonitoringResult.class)
+                .build();
+
         return Worker.builder()
                 .name("job-monitoring-agent")
                 .capabilities(List.of(cap("job-monitoring")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "progress", "in-progress",
-                        "estimatedCompletion", "2026-07-01"
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
-     * Records payment to tamper-evident ledger and signals active financial-review case.
+     * Records a contractor payment to the tamper-evident ledger.
      *
-     * <p>Stub captures the INTENT — the return map includes the data that would be
-     * signaled to financial-review. In production this would:
-     * <ol>
-     *   <li>Call {@code FinanceDomainLedgerHandler.writeEntry(SLA_BREACH/COMPLETED, record)}</li>
-     *   <li>Query {@code LifeCaseTracker.findActiveByCaseType("financial-review")}</li>
-     *   <li>For each active tracker, call {@code CaseHubRuntime.signal(tracker.engineCaseId, "contractorPayment", paymentData)}</li>
-     * </ol>
+     * <p>Uses OpenClaw's LLM API to record a contractor payment to the
+     * tamper-evident ledger and emit a cross-case signal.
      */
     private Worker recordPaymentWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("home-agent"))
+                .systemPrompt("""
+                        You are a contractor coordination agent. Record a contractor payment
+                        to the tamper-evident ledger and emit a cross-case signal.""")
+                .responseSchema(RecordPaymentResult.class)
+                .build();
+
         return Worker.builder()
                 .name("record-payment-agent")
                 .capabilities(List.of(cap("record-payment")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "paymentRecorded", true,
-                        "amount", 1500,
-                        "ledgerEntryId", "LEDGER-" + System.currentTimeMillis(),
-                        "crossCaseSignal", "financial-review"
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
+    }
+
+    private AgentDescriptor homeDescriptor() {
+        return new AgentDescriptor(
+                "openclaw:home-agent@1",          // agentId
+                "OpenClaw Home Agent",            // name
+                "1",                              // version
+                "openclaw",                       // provider
+                "openclaw",                       // modelFamily
+                null,                             // modelVersion
+                null,                             // weightsFingerprint
+                null,                             // domainVocabulary
+                null,                             // slotVocabulary
+                null,                             // dispositionVocabulary
+                null,                             // axisVocabularies
+                "casehubio/life/household",       // slot
+                List.of(),                        // capabilities
+                null,                             // disposition
+                "GB",                             // jurisdiction
+                null,                             // dataHandlingPolicy
+                tenancyId,                        // tenancyId
+                "Household maintenance agent"     // briefing
+        );
     }
 }

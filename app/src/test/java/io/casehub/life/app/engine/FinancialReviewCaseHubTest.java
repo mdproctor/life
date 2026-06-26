@@ -50,7 +50,7 @@ class FinancialReviewCaseHubTest {
     @Test
     void hasFiveCapabilities() {
         var names = caseHub.getDefinition().getCapabilities()
-                .stream().map(c -> c.getName()).toList();
+                .stream().map(c -> c.name()).toList();
         assertEquals(5, names.size());
         assertTrue(names.containsAll(List.of(
                 "gather-data", "analyse-anomalies", "escalate-anomalies",
@@ -81,7 +81,7 @@ class FinancialReviewCaseHubTest {
     void hasFiveWorkers() {
         var workers = caseHub.getDefinition().getWorkers();
         assertEquals(5, workers.size(), "Exactly 5 workers expected — size catches double-augmentation");
-        var names = Set.copyOf(workers.stream().map(w -> w.getName()).toList());
+        var names = Set.copyOf(workers.stream().map(w -> w.name()).toList());
         assertEquals(Set.of(
                 "gather-data-agent", "analyse-anomalies-agent",
                 "escalate-anomalies-agent", "oversight-response-agent",

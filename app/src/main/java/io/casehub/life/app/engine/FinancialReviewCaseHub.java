@@ -16,11 +16,21 @@
 package io.casehub.life.app.engine;
 
 import io.casehub.api.engine.YamlCaseHub;
-import io.casehub.api.model.Capability;
 import io.casehub.api.model.CaseDefinition;
-import io.casehub.api.model.Worker;
-import io.casehub.api.model.WorkerResult;
+import io.casehub.api.model.ai.Agent;
+import io.casehub.eidos.api.AgentDescriptor;
+import io.casehub.life.app.engine.agent.AnalyseAnomaliesResult;
+import io.casehub.life.app.engine.agent.EscalateAnomaliesResult;
+import io.casehub.life.app.engine.agent.GatherDataResult;
+import io.casehub.life.app.engine.agent.LifeOpenClawChatModelFactory;
+import io.casehub.life.app.engine.agent.OversightResponseResult;
+import io.casehub.life.app.engine.agent.ProduceReportResult;
+import io.casehub.api.model.AgentWorkerFunction;
+import io.casehub.worker.api.Capability;
+import io.casehub.worker.api.Worker;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.List;
 import java.util.Map;
@@ -50,6 +60,12 @@ import java.util.Map;
 @ApplicationScoped
 public class FinancialReviewCaseHub extends YamlCaseHub {
 
+    @Inject
+    LifeOpenClawChatModelFactory openClawFactory;
+
+    @ConfigProperty(name = "casehub.life.tenancy-id")
+    String tenancyId;
+
     private volatile CaseDefinition augmentedDefinition;
 
     public FinancialReviewCaseHub() {
@@ -76,6 +92,7 @@ public class FinancialReviewCaseHub extends YamlCaseHub {
                 oversightResponseWorker(),
                 produceReportWorker()
         ));
+        yaml.setAgentDescriptors(Map.of("openclaw:finance-agent@1", financeDescriptor()));
         return yaml;
     }
 
@@ -86,31 +103,46 @@ public class FinancialReviewCaseHub extends YamlCaseHub {
     /**
      * Collects budget data for review period. In production would also process
      * cross-case signals at {@code .contractorPayment}.
+     *
+     * <p>Uses OpenClaw's LLM API to gather financial data by aggregating
+     * transactions across all linked accounts.
      */
     private Worker gatherDataWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("finance-agent"))
+                .systemPrompt("""
+                        You are a financial review agent. Gather financial data by aggregating
+                        transactions across all linked accounts.""")
+                .responseSchema(GatherDataResult.class)
+                .build();
+
         return Worker.builder()
                 .name("gather-data-agent")
                 .capabilities(List.of(cap("gather-data")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "totalSpend", 5000,
-                        "budgetLimit", 4500,
-                        "categories", List.of("groceries", "utilities", "contractor")
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
      * Analyses budget data for anomalies. Sets {@code hasAnomalies} flag and
      * {@code anomalyDetails} string.
+     *
+     * <p>Uses OpenClaw's LLM API to analyse spending anomalies by
+     * comparing current spending patterns against budget limits.
      */
     private Worker analyseAnomaliesWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("finance-agent"))
+                .systemPrompt("""
+                        You are a financial review agent. Analyse spending anomalies by
+                        comparing current spending patterns against budget limits.""")
+                .responseSchema(AnalyseAnomaliesResult.class)
+                .build();
+
         return Worker.builder()
                 .name("analyse-anomalies-agent")
                 .capabilities(List.of(cap("analyse-anomalies")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "hasAnomalies", true,
-                        "anomalyDetails", "Spending exceeded budget by $500 (11%)"
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
@@ -120,15 +152,23 @@ public class FinancialReviewCaseHub extends YamlCaseHub {
      *
      * <p>In production would call {@code MessageService.dispatch()} on
      * {@code case-{caseId}/oversight}.
+     *
+     * <p>Uses OpenClaw's LLM API to escalate anomalies to the oversight
+     * channel for human review.
      */
     private Worker escalateAnomaliesWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("finance-agent"))
+                .systemPrompt("""
+                        You are a financial review agent. Escalate anomalies to the oversight
+                        channel for human review.""")
+                .responseSchema(EscalateAnomaliesResult.class)
+                .build();
+
         return Worker.builder()
                 .name("escalate-anomalies-agent")
                 .capabilities(List.of(cap("escalate-anomalies")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "escalationSent", true,
-                        "channel", "case-stub/oversight"
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
@@ -136,15 +176,23 @@ public class FinancialReviewCaseHub extends YamlCaseHub {
      * Processes oversight RESPONSE decision. Fires when
      * {@code QhorusMessageSignalBridge} sets {@code .channelMessage} with
      * {@code messageType == "RESPONSE"}.
+     *
+     * <p>Uses OpenClaw's LLM API to process oversight response from
+     * the household admin regarding flagged anomalies.
      */
     private Worker oversightResponseWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("finance-agent"))
+                .systemPrompt("""
+                        You are a financial review agent. Process oversight response from
+                        the household admin regarding flagged anomalies.""")
+                .responseSchema(OversightResponseResult.class)
+                .build();
+
         return Worker.builder()
                 .name("oversight-response-agent")
                 .capabilities(List.of(cap("oversight-response")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "approved", true,
-                        "comments", "Approved — one-time overrun acceptable"
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
@@ -156,16 +204,46 @@ public class FinancialReviewCaseHub extends YamlCaseHub {
      * </ul>
      *
      * <p>In production would call {@code FinanceDomainLedgerHandler.writeEntry()}.
+     *
+     * <p>Uses OpenClaw's LLM API to produce a monthly financial report
+     * summarising spending and recording it to the ledger.
      */
     private Worker produceReportWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("finance-agent"))
+                .systemPrompt("""
+                        You are a financial review agent. Produce a monthly financial report
+                        summarising spending and recording it to the ledger.""")
+                .responseSchema(ProduceReportResult.class)
+                .build();
+
         return Worker.builder()
                 .name("produce-report-agent")
                 .capabilities(List.of(cap("produce-report")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "reportGenerated", true,
-                        "summary", "Monthly financial review complete",
-                        "ledgerEntryId", "LEDGER-" + System.currentTimeMillis()
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
+    }
+
+    private AgentDescriptor financeDescriptor() {
+        return new AgentDescriptor(
+                "openclaw:finance-agent@1",      // agentId
+                "OpenClaw Finance Agent",        // name
+                "1",                             // version
+                "openclaw",                      // provider
+                "openclaw",                      // modelFamily
+                null,                            // modelVersion
+                null,                            // weightsFingerprint
+                null,                            // domainVocabulary
+                null,                            // slotVocabulary
+                null,                            // dispositionVocabulary
+                null,                            // axisVocabularies
+                "casehubio/life/finance",        // slot
+                List.of(),                       // capabilities
+                null,                            // disposition
+                "GB",                            // jurisdiction
+                null,                            // dataHandlingPolicy
+                tenancyId,                       // tenancyId
+                "Financial review and governance agent" // briefing
+        );
     }
 }

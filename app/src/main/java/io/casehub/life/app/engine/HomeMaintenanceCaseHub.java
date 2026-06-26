@@ -16,11 +16,21 @@
 package io.casehub.life.app.engine;
 
 import io.casehub.api.engine.YamlCaseHub;
-import io.casehub.api.model.Capability;
 import io.casehub.api.model.CaseDefinition;
-import io.casehub.api.model.Worker;
-import io.casehub.api.model.WorkerResult;
+import io.casehub.api.model.ai.Agent;
+import io.casehub.eidos.api.AgentDescriptor;
+import io.casehub.life.app.engine.agent.GetQuotesResult;
+import io.casehub.life.app.engine.agent.IssueCommitmentResult;
+import io.casehub.life.app.engine.agent.LifeOpenClawChatModelFactory;
+import io.casehub.life.app.engine.agent.MonitorJobResult;
+import io.casehub.life.app.engine.agent.RecordCompletionResult;
+import io.casehub.life.app.engine.agent.ScheduleInspectionResult;
+import io.casehub.api.model.AgentWorkerFunction;
+import io.casehub.worker.api.Capability;
+import io.casehub.worker.api.Worker;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.List;
 import java.util.Map;
@@ -40,6 +50,12 @@ import java.util.Map;
  */
 @ApplicationScoped
 public class HomeMaintenanceCaseHub extends YamlCaseHub {
+
+    @Inject
+    LifeOpenClawChatModelFactory openClawFactory;
+
+    @ConfigProperty(name = "casehub.life.tenancy-id")
+    String tenancyId;
 
     private volatile CaseDefinition augmentedDefinition;
 
@@ -67,6 +83,7 @@ public class HomeMaintenanceCaseHub extends YamlCaseHub {
                 monitorJobWorker(),
                 recordCompletionWorker()
         ));
+        yaml.setAgentDescriptors(Map.of("openclaw:home-agent@1", homeDescriptor()));
         return yaml;
     }
 
@@ -75,79 +92,135 @@ public class HomeMaintenanceCaseHub extends YamlCaseHub {
     }
 
     /**
-     * Schedules and performs a home inspection. Returns inspection results.
+     * Schedules and performs a home inspection.
+     *
+     * <p>Uses OpenClaw's LLM API to schedule a property inspection, assess
+     * the condition, and report findings.
      */
     private Worker scheduleInspectionWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("home-agent"))
+                .systemPrompt("""
+                        You are a home maintenance agent. Schedule a property inspection,
+                        assess the condition, and report findings.""")
+                .responseSchema(ScheduleInspectionResult.class)
+                .build();
+
         return Worker.builder()
                 .name("schedule-inspection-agent")
                 .capabilities(List.of(cap("schedule-inspection")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "inspected", true,
-                        "condition", "roof needs repair",
-                        "inspectionDate", "2026-06-15"
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
-     * Obtains contractor quotes based on inspection results. Returns 2 quote options.
+     * Obtains contractor quotes based on inspection results.
+     *
+     * <p>Uses OpenClaw's LLM API to gather contractor quotes for the
+     * required maintenance work.
      */
     private Worker getQuotesWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("home-agent"))
+                .systemPrompt("""
+                        You are a home maintenance agent. Gather contractor quotes for the
+                        required maintenance work.""")
+                .responseSchema(GetQuotesResult.class)
+                .build();
+
         return Worker.builder()
                 .name("get-quotes-agent")
                 .capabilities(List.of(cap("get-quotes")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "quoteCount", 2,
-                        "quotes", List.of(
-                                Map.of("contractor", "ABC Roofing", "amount", 4500, "timeline", "2 weeks"),
-                                Map.of("contractor", "XYZ Repairs", "amount", 3800, "timeline", "3 weeks")
-                        )
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
-     * Issues a qhorus COMMAND to the selected contractor (STUB — in production would
-     * create a qhorus COMMAND on a case-specific channel and the QhorusMessageSignalBridge
-     * would set {@code .channelMessage} when the contractor responds).
+     * Issues a commitment to the selected contractor.
+     *
+     * <p>Uses OpenClaw's LLM API to issue a commitment to the selected
+     * contractor for the approved work.
      */
     private Worker issueCommitmentWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("home-agent"))
+                .systemPrompt("""
+                        You are a home maintenance agent. Issue a commitment to the selected
+                        contractor for the approved work.""")
+                .responseSchema(IssueCommitmentResult.class)
+                .build();
+
         return Worker.builder()
                 .name("issue-commitment-agent")
                 .capabilities(List.of(cap("issue-commitment")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "commitmentIssued", true,
-                        "channel", "case-stub/contractor"
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
-     * Monitors job progress after contractor RESPONSE received via QhorusMessageSignalBridge.
+     * Monitors job progress after contractor RESPONSE received.
+     *
+     * <p>Uses OpenClaw's LLM API to monitor job progress and report
+     * estimated completion.
      */
     private Worker monitorJobWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("home-agent"))
+                .systemPrompt("""
+                        You are a home maintenance agent. Monitor job progress and report
+                        estimated completion.""")
+                .responseSchema(MonitorJobResult.class)
+                .build();
+
         return Worker.builder()
                 .name("monitor-job-agent")
                 .capabilities(List.of(cap("monitor-job")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "progress", "in-progress",
-                        "estimatedCompletion", "2026-07-01"
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
-     * Records job completion to tamper-evident ledger (stub — in production would
-     * call LifeLedgerWriter).
+     * Records job completion to tamper-evident ledger.
+     *
+     * <p>Uses OpenClaw's LLM API to record job completion to the
+     * tamper-evident ledger.
      */
     private Worker recordCompletionWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("home-agent"))
+                .systemPrompt("""
+                        You are a home maintenance agent. Record job completion to the
+                        tamper-evident ledger.""")
+                .responseSchema(RecordCompletionResult.class)
+                .build();
+
         return Worker.builder()
                 .name("record-completion-agent")
                 .capabilities(List.of(cap("record-completion")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "recorded", true,
-                        "ledgerEntryId", "LEDGER-" + System.currentTimeMillis()
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
+    }
+
+    private AgentDescriptor homeDescriptor() {
+        return new AgentDescriptor(
+                "openclaw:home-agent@1",       // agentId
+                "OpenClaw Home Agent",         // name
+                "1",                           // version
+                "openclaw",                    // provider
+                "openclaw",                    // modelFamily
+                null,                          // modelVersion
+                null,                          // weightsFingerprint
+                null,                          // domainVocabulary
+                null,                          // slotVocabulary
+                null,                          // dispositionVocabulary
+                null,                          // axisVocabularies
+                "casehubio/life/household",    // slot
+                List.of(),                     // capabilities
+                null,                          // disposition
+                "GB",                          // jurisdiction
+                null,                          // dataHandlingPolicy
+                tenancyId,                     // tenancyId
+                "Household maintenance agent"  // briefing
+        );
     }
 }

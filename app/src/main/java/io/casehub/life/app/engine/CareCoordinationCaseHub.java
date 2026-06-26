@@ -16,11 +16,19 @@
 package io.casehub.life.app.engine;
 
 import io.casehub.api.engine.YamlCaseHub;
-import io.casehub.api.model.Capability;
 import io.casehub.api.model.CaseDefinition;
-import io.casehub.api.model.Worker;
-import io.casehub.api.model.WorkerResult;
+import io.casehub.api.model.ai.Agent;
+import io.casehub.eidos.api.AgentDescriptor;
+import io.casehub.life.app.engine.agent.CarePlanResult;
+import io.casehub.life.app.engine.agent.HealthCheckResult;
+import io.casehub.life.app.engine.agent.LifeOpenClawChatModelFactory;
+import io.casehub.life.app.engine.agent.NeedsAssessmentResult;
+import io.casehub.api.model.AgentWorkerFunction;
+import io.casehub.worker.api.Capability;
+import io.casehub.worker.api.Worker;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.List;
 import java.util.Map;
@@ -43,6 +51,12 @@ import java.util.Map;
  */
 @ApplicationScoped
 public class CareCoordinationCaseHub extends YamlCaseHub {
+
+    @Inject
+    LifeOpenClawChatModelFactory openClawFactory;
+
+    @ConfigProperty(name = "casehub.life.tenancy-id")
+    String tenancyId;
 
     private volatile CaseDefinition augmentedDefinition;
 
@@ -68,6 +82,7 @@ public class CareCoordinationCaseHub extends YamlCaseHub {
                 carePlanWorker(),
                 healthCheckWorker()
         ));
+        yaml.setAgentDescriptors(Map.of("openclaw:health-agent@1", healthDescriptor()));
         return yaml;
     }
 
@@ -76,52 +91,91 @@ public class CareCoordinationCaseHub extends YamlCaseHub {
     }
 
     /**
-     * Assesses care needs based on the care request. Returns an assessment with
-     * care level and recommended frequency.
+     * Assesses care needs based on the care request.
+     *
+     * <p>Uses OpenClaw's LLM API to assess patient care needs, determining
+     * care level, recommended frequency, and any special requirements.
      */
     private Worker needsAssessmentWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("health-agent"))
+                .systemPrompt("""
+                        You are a care coordination agent. Assess care needs for the patient,
+                        determining care level, recommended frequency, and any special requirements.""")
+                .responseSchema(NeedsAssessmentResult.class)
+                .build();
+
         return Worker.builder()
                 .name("needs-assessment-agent")
                 .capabilities(List.of(cap("needs-assessment")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "careLevel", "moderate",
-                        "recommendedFrequency", "3x weekly",
-                        "specialRequirements", List.of("mobility assistance", "medication management")
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
-     * Produces a care schedule based on the assessment.
+     * Creates a care plan with schedule and task list.
+     *
+     * <p>Uses OpenClaw's LLM API to create a care plan with schedule, duration,
+     * and task list based on the needs assessment.
      */
     private Worker carePlanWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("health-agent"))
+                .systemPrompt("""
+                        You are a care coordination agent. Create a care plan with schedule,
+                        duration, and task list based on the needs assessment.""")
+                .responseSchema(CarePlanResult.class)
+                .build();
+
         return Worker.builder()
                 .name("care-plan-agent")
                 .capabilities(List.of(cap("care-plan")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "schedule", List.of("Mon 09:00", "Wed 09:00", "Fri 09:00"),
-                        "duration", "2 hours per visit",
-                        "tasks", List.of("medication check", "mobility exercises", "meal preparation")
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
-     * Analyses care notes from the episode and flags health concerns.
-     * Sets {@code healthConcern: true} if the episode notes contain a concern indicator.
+     * Performs periodic health check and flags concerns.
+     *
+     * <p>Uses OpenClaw's LLM API to perform a periodic health check, reviewing
+     * the patient's condition and flagging any concerns for escalation.
      */
     private Worker healthCheckWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("health-agent"))
+                .systemPrompt("""
+                        You are a care coordination agent. Perform a periodic health check,
+                        reviewing the patient's condition and flagging any concerns.""")
+                .responseSchema(HealthCheckResult.class)
+                .build();
+
         return Worker.builder()
                 .name("health-check-agent")
                 .capabilities(List.of(cap("health-check")))
-                .function((Map<String, Object> input) -> {
-                    // Stub: no concern by default — test can override via context
-                    return WorkerResult.of(Map.of(
-                            "reviewed", true,
-                            "healthConcern", false,
-                            "notes", "Patient stable, no concerns identified"
-                    ));
-                })
+                .function(new AgentWorkerFunction(agent))
                 .build();
+    }
+
+    private AgentDescriptor healthDescriptor() {
+        return new AgentDescriptor(
+                "openclaw:health-agent@1",       // agentId
+                "OpenClaw Health Agent",         // name
+                "1",                             // version
+                "openclaw",                      // provider
+                "openclaw",                      // modelFamily
+                null,                            // modelVersion
+                null,                            // weightsFingerprint
+                null,                            // domainVocabulary
+                null,                            // slotVocabulary
+                null,                            // dispositionVocabulary
+                null,                            // axisVocabularies
+                "casehubio/life/health",         // slot
+                List.of(),                       // capabilities
+                null,                            // disposition
+                "GB",                            // jurisdiction
+                null,                            // dataHandlingPolicy
+                tenancyId,                       // tenancyId
+                "Health domain agent"            // briefing
+        );
     }
 }

@@ -44,7 +44,7 @@ class FinancialReviewCaseDefinitionsTest {
     @Test
     void hasFiveCapabilities() {
         var def = FinancialReviewCaseDefinitions.financialReview();
-        var names = def.getCapabilities().stream().map(c -> c.getName()).toList();
+        var names = def.getCapabilities().stream().map(c -> c.name()).toList();
         assertEquals(5, names.size());
         assertTrue(names.containsAll(List.of(
                 "gather-data", "analyse-anomalies", "escalate-anomalies",

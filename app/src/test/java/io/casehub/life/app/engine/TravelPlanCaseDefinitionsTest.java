@@ -49,7 +49,7 @@ class TravelPlanCaseDefinitionsTest {
     void hasSevenCapabilities() {
         CaseDefinition def = TravelPlanCaseDefinitions.travelPlan();
         assertEquals(7, def.getCapabilities().size());
-        var names = def.getCapabilities().stream().map(c -> c.getName()).toList();
+        var names = def.getCapabilities().stream().map(c -> c.name()).toList();
         assertTrue(names.contains("destination-research"));
         assertTrue(names.contains("flight-search"));
         assertTrue(names.contains("hotel-search"));

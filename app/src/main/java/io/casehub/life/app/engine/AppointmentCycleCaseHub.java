@@ -16,14 +16,18 @@
 package io.casehub.life.app.engine;
 
 import io.casehub.api.engine.YamlCaseHub;
-import io.casehub.api.model.Capability;
 import io.casehub.api.model.CaseDefinition;
-import io.casehub.api.model.Worker;
-import io.casehub.api.model.WorkerResult;
 import io.casehub.api.model.ai.Agent;
 import io.casehub.eidos.api.AgentDescriptor;
 import io.casehub.life.app.engine.agent.BookingResult;
-import io.casehub.life.app.engine.agent.LifeOpenClawChatModelProvider;
+import io.casehub.life.app.engine.agent.ConfirmAppointmentResult;
+import io.casehub.life.app.engine.agent.FindAlternativeResult;
+import io.casehub.life.app.engine.agent.LifeOpenClawChatModelFactory;
+import io.casehub.life.app.engine.agent.PreVisitPrepResult;
+import io.casehub.life.app.engine.agent.RecordHealthDecisionResult;
+import io.casehub.api.model.AgentWorkerFunction;
+import io.casehub.worker.api.Capability;
+import io.casehub.worker.api.Worker;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -52,7 +56,7 @@ import java.util.Map;
 public class AppointmentCycleCaseHub extends YamlCaseHub {
 
     @Inject
-    LifeOpenClawChatModelProvider openClaw;
+    LifeOpenClawChatModelFactory openClawFactory;
 
     @ConfigProperty(name = "casehub.life.tenancy-id")
     String tenancyId;
@@ -76,45 +80,6 @@ public class AppointmentCycleCaseHub extends YamlCaseHub {
     }
 
     private CaseDefinition augment(final CaseDefinition yaml) {
-        yaml.getWorkers().addAll(List.of(
-                bookAppointmentWorker(),
-                findAlternativeWorker(),
-                confirmAppointmentWorker(),
-                preVisitPrepWorker(),
-                recordHealthDecisionWorker()
-        ));
-        return yaml;
-    }
-
-    private static Capability cap(final String name) {
-        return Capability.builder().name(name).inputSchema(".").outputSchema(".").build();
-    }
-
-    /**
-     * Books an appointment via OpenClaw's LLM API (/v1/chat/completions).
-     *
-     * <p>First real LLM-backed worker in casehub-life. Uses WorkerFunction.AgentExec(Agent)
-     * per the engine#463 settled abstraction. OpenClaw returns structured JSON conforming
-     * to BookingResult — confirmed=false indicates a PENDING booking; the confirm-appointment
-     * binding fires when .booking != null and .booking.declined != true.
-     *
-     * <p>AgentDescriptor.agentId "openclaw:health-agent@1" follows the
-     * {model-family}:{persona}@{major} convention. This value MUST match the
-     * casehub-openclaw-casehub config map key when WorkerProvisioner is wired (life#37).
-     */
-    private Worker bookAppointmentWorker() {
-        final Agent bookingAgent = Agent.builder()
-                .model(openClaw)
-                .systemPrompt("""
-                        You are a healthcare appointment booking agent for a UK household.
-                        Book medical appointments with the requested provider.
-                        If the provider is unavailable, set declined=true and provide a reason.
-                        Respond with valid JSON only — no prose, no explanation.
-                        """)
-                .userMessage("Book a {{appointmentType}} appointment with provider {{provider}}.")
-                .responseSchema(BookingResult.class)
-                .build();
-
         final AgentDescriptor descriptor = new AgentDescriptor(
                 "openclaw:health-agent@1",    // agentId — MUST match provisioner config key (life#37)
                 "OpenClaw Health Agent",       // name
@@ -136,61 +101,139 @@ public class AppointmentCycleCaseHub extends YamlCaseHub {
                 "Health domain booking and follow-up agent"  // briefing
         );
 
+        yaml.getWorkers().addAll(List.of(
+                bookAppointmentWorker(),
+                findAlternativeWorker(),
+                confirmAppointmentWorker(),
+                preVisitPrepWorker(),
+                recordHealthDecisionWorker()
+        ));
+        yaml.setAgentDescriptors(Map.of("openclaw:health-agent@1", descriptor));
+        return yaml;
+    }
+
+    private static Capability cap(final String name) {
+        return Capability.builder().name(name).inputSchema(".").outputSchema(".").build();
+    }
+
+    /**
+     * Books an appointment via OpenClaw's LLM API (/v1/chat/completions).
+     *
+     * <p>First real LLM-backed worker in casehub-life. Uses WorkerFunction.AgentExec(Agent)
+     * per the engine#463 settled abstraction. OpenClaw returns structured JSON conforming
+     * to BookingResult — confirmed=false indicates a PENDING booking; the confirm-appointment
+     * binding fires when .booking != null and .booking.declined != true.
+     *
+     * <p>AgentDescriptor.agentId "openclaw:health-agent@1" follows the
+     * {model-family}:{persona}@{major} convention. This value MUST match the
+     * casehub-openclaw-casehub config map key when WorkerProvisioner is wired (life#37).
+     */
+    private Worker bookAppointmentWorker() {
+        final Agent bookingAgent = Agent.builder()
+                .model(openClawFactory.forAgent("health-agent"))
+                .systemPrompt("""
+                        You are a healthcare appointment booking agent for a UK household.
+                        Book medical appointments with the requested provider.
+                        If the provider is unavailable, set declined=true and provide a reason.
+                        Respond with valid JSON only — no prose, no explanation.
+                        """)
+                .userMessage("Book a {{appointmentType}} appointment with provider {{provider}}.")
+                .responseSchema(BookingResult.class)
+                .build();
+
         return Worker.builder()
                 .name("book-appointment-agent")
                 .capabilities(List.of(cap("book-appointment")))
-                .function(bookingAgent)
-                .agentDescriptor(descriptor)
+                .function(new AgentWorkerFunction(bookingAgent))
                 .build();
     }
 
-    /** Finds an alternative provider after a decline. Stub — pending Layer 7. */
-    private static Worker findAlternativeWorker() {
+    /**
+     * Finds an alternative provider after a booking was declined.
+     *
+     * <p>Uses OpenClaw's LLM API to search for alternative providers and propose
+     * an alternative appointment. Part of the appointment-cycle adaptive path.
+     */
+    private Worker findAlternativeWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("health-agent"))
+                .systemPrompt("""
+                        You are a healthcare appointment agent. Find an alternative provider
+                        after a booking was declined. Search available providers and propose
+                        an alternative appointment.""")
+                .responseSchema(FindAlternativeResult.class)
+                .build();
+
         return Worker.builder()
                 .name("find-alternative-agent")
                 .capabilities(List.of(cap("find-alternative")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "alternativeFound", true,
-                        "appointmentId", "APT-ALT-" + System.currentTimeMillis(),
-                        "provider", "Dr Alternative",
-                        "confirmed", false
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
-    /** Sends appointment confirmation and reminder. Stub — pending Layer 7. */
-    private static Worker confirmAppointmentWorker() {
+    /**
+     * Sends appointment confirmation and schedules a reminder.
+     *
+     * <p>Uses OpenClaw's LLM API to send confirmation to the patient and schedule
+     * a reminder for 24 hours before the appointment.
+     */
+    private Worker confirmAppointmentWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("health-agent"))
+                .systemPrompt("""
+                        You are a healthcare appointment agent. Send appointment confirmation
+                        to the patient and schedule a reminder for 24 hours before.""")
+                .responseSchema(ConfirmAppointmentResult.class)
+                .build();
+
         return Worker.builder()
                 .name("confirm-appointment-agent")
                 .capabilities(List.of(cap("confirm-appointment")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "confirmed", true,
-                        "reminderSent", true
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
-    /** Sends pre-visit checklist and preparation instructions. Stub — pending Layer 7. */
-    private static Worker preVisitPrepWorker() {
+    /**
+     * Sends pre-visit preparation checklist and instructions.
+     *
+     * <p>Uses OpenClaw's LLM API to send a pre-visit checklist and preparation
+     * instructions to the patient.
+     */
+    private Worker preVisitPrepWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("health-agent"))
+                .systemPrompt("""
+                        You are a healthcare appointment agent. Send pre-visit preparation
+                        checklist and instructions to the patient.""")
+                .responseSchema(PreVisitPrepResult.class)
+                .build();
+
         return Worker.builder()
                 .name("pre-visit-prep-agent")
                 .capabilities(List.of(cap("pre-visit-prep")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "checklistSent", true,
-                        "instructions", "Bring ID, insurance card, list of medications"
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
-    /** Records health decision to tamper-evident ledger. Stub — pending Layer 7. */
-    private static Worker recordHealthDecisionWorker() {
+    /**
+     * Records health decision outcome to the tamper-evident ledger.
+     *
+     * <p>Uses OpenClaw's LLM API to record health decision outcomes to the
+     * tamper-evident ledger for compliance tracking.
+     */
+    private Worker recordHealthDecisionWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("health-agent"))
+                .systemPrompt("""
+                        You are a healthcare records agent. Record health decision outcomes
+                        to the tamper-evident ledger.""")
+                .responseSchema(RecordHealthDecisionResult.class)
+                .build();
+
         return Worker.builder()
                 .name("record-health-decision-agent")
                 .capabilities(List.of(cap("record-health-decision")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "recorded", true,
-                        "ledgerEntryId", "LEDGER-" + System.currentTimeMillis()
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 }

@@ -1,9 +1,10 @@
 package io.casehub.life.app.routing;
 
 import io.casehub.api.spi.ActionRiskClassifier;
-import io.casehub.api.spi.PlannedAction;
+import io.casehub.api.spi.ClassificationContext;
 import io.casehub.api.spi.RiskClassifier;
 import io.casehub.api.spi.RiskDecision;
+import io.casehub.worker.api.PlannedAction;
 import io.casehub.life.api.HouseholdActionType;
 import io.casehub.life.api.HouseholdGroups;
 import io.casehub.platform.api.identity.CurrentPrincipal;
@@ -36,7 +37,7 @@ public class LifeActionRiskClassifier implements ActionRiskClassifier {
     @Inject CurrentPrincipal principal;
 
     @Override
-    public RiskDecision classify(PlannedAction action) {
+    public RiskDecision classify(PlannedAction action, ClassificationContext context) {
         return HouseholdActionType.fromActionType(action.actionType())
             .map(type -> classifyKnownType(type, action))
             .orElse(new RiskDecision.Autonomous());
@@ -57,7 +58,7 @@ public class LifeActionRiskClassifier implements ActionRiskClassifier {
     }
 
     private RiskDecision classifyByAmount(HouseholdActionType type, PlannedAction action, boolean admin) {
-        Object raw = action.context().get("amount");
+        Object raw = action.parameters().get("amount");
         if (raw == null) return new RiskDecision.Autonomous();
         double amount;
         try {
@@ -123,14 +124,14 @@ public class LifeActionRiskClassifier implements ActionRiskClassifier {
     }
 
     private String buildReason(HouseholdActionType type, PlannedAction action) {
-        String amt = formatAmount(action.context());
+        String amt = formatAmount(action.parameters());
         return switch (type) {
             case SPEND_PURCHASE, SPEND_SUBSCRIPTION_MODIFY ->
                 "Spend of " + amt + " requires household approval";
             case SPEND_SUBSCRIPTION_CANCEL ->
                 "Subscription cancellation — confirm before proceeding";
             case BOOKING_NONREFUNDABLE -> {
-                String amtStr = action.context().containsKey("amount") ? " of " + amt : "";
+                String amtStr = action.parameters().containsKey("amount") ? " of " + amt : "";
                 yield "Non-refundable booking" + amtStr + " — cannot be undone once confirmed";
             }
             case BOOKING_REFUNDABLE ->

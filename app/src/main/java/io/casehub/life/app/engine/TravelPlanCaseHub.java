@@ -17,14 +17,26 @@ package io.casehub.life.app.engine;
 
 import io.casehub.api.engine.YamlCaseHub;
 import io.casehub.api.model.Binding;
-import io.casehub.api.model.Capability;
 import io.casehub.api.model.CaseDefinition;
 import io.casehub.api.model.ContextChangeTrigger;
 import io.casehub.api.model.OnThresholdReached;
 import io.casehub.api.model.SubCase;
-import io.casehub.api.model.Worker;
-import io.casehub.api.model.WorkerResult;
+import io.casehub.api.model.ai.Agent;
+import io.casehub.eidos.api.AgentDescriptor;
+import io.casehub.life.app.engine.agent.BudgetAssessmentResult;
+import io.casehub.life.app.engine.agent.ConfirmationResult;
+import io.casehub.life.app.engine.agent.DestinationResearchResult;
+import io.casehub.life.app.engine.agent.FlightSearchResult;
+import io.casehub.life.app.engine.agent.HotelSearchResult;
+import io.casehub.life.app.engine.agent.LifeOpenClawChatModelFactory;
+import io.casehub.life.app.engine.agent.RebookingResult;
+import io.casehub.life.app.engine.agent.TravelBookingResult;
+import io.casehub.api.model.AgentWorkerFunction;
+import io.casehub.worker.api.Capability;
+import io.casehub.worker.api.Worker;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.List;
 import java.util.Map;
@@ -47,6 +59,12 @@ import java.util.Map;
  */
 @ApplicationScoped
 public class TravelPlanCaseHub extends YamlCaseHub {
+
+    @Inject
+    LifeOpenClawChatModelFactory openClawFactory;
+
+    @ConfigProperty(name = "casehub.life.tenancy-id")
+    String tenancyId;
 
     private volatile CaseDefinition augmentedDefinition;
 
@@ -85,6 +103,7 @@ public class TravelPlanCaseHub extends YamlCaseHub {
                 familyVoteBinding("family-vote-c")
         ));
 
+        yaml.setAgentDescriptors(Map.of("openclaw:travel-agent@1", travelDescriptor()));
         return yaml;
     }
 
@@ -117,124 +136,179 @@ public class TravelPlanCaseHub extends YamlCaseHub {
     }
 
     /**
-     * Researches destination options. Returns 3 options with costs.
+     * Researches destination options.
+     *
+     * <p>Uses OpenClaw's LLM API to research travel destinations with
+     * costs and ratings.
      */
     private Worker destinationResearchWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("travel-agent"))
+                .systemPrompt("""
+                        You are a travel planning agent. Research destination options with
+                        costs and ratings.""")
+                .responseSchema(DestinationResearchResult.class)
+                .build();
+
         return Worker.builder()
                 .name("destination-research-agent")
                 .capabilities(List.of(cap("destination-research")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "options", List.of(
-                                Map.of("name", "Barcelona", "estimatedCost", 1800),
-                                Map.of("name", "Tokyo", "estimatedCost", 4500),
-                                Map.of("name", "Reykjavik", "estimatedCost", 6200)
-                        )
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
      * Searches available flights for selected destination.
+     *
+     * <p>Uses OpenClaw's LLM API to search for flights with airline,
+     * price, and number of stops.
      */
     private Worker flightSearchWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("travel-agent"))
+                .systemPrompt("""
+                        You are a travel planning agent. Search for flights with airline,
+                        price, and number of stops.""")
+                .responseSchema(FlightSearchResult.class)
+                .build();
+
         return Worker.builder()
                 .name("flight-search-agent")
                 .capabilities(List.of(cap("flight-search")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "flights", List.of(
-                                Map.of("airline", "BA", "price", 450, "duration", "2h30m"),
-                                Map.of("airline", "Ryanair", "price", 180, "duration", "3h15m")
-                        )
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
      * Searches available hotels for selected destination.
+     *
+     * <p>Uses OpenClaw's LLM API to search for hotels with name,
+     * price, and rating.
      */
     private Worker hotelSearchWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("travel-agent"))
+                .systemPrompt("""
+                        You are a travel planning agent. Search for hotels with name,
+                        price, and rating.""")
+                .responseSchema(HotelSearchResult.class)
+                .build();
+
         return Worker.builder()
                 .name("hotel-search-agent")
                 .capabilities(List.of(cap("hotel-search")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "hotels", List.of(
-                                Map.of("name", "Grand Hotel", "pricePerNight", 120, "rating", 4.5),
-                                Map.of("name", "Budget Inn", "pricePerNight", 55, "rating", 3.8)
-                        )
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
-     * Assesses total cost. Sets {@code requiresApproval} (true if over 2000) and
-     * {@code isHighValue} (true if over 5000).
+     * Assesses total cost.
+     *
+     * <p>Uses OpenClaw's LLM API to assess the total travel budget
+     * and determine if approval is required.
      */
     private Worker budgetAssessmentWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("travel-agent"))
+                .systemPrompt("""
+                        You are a travel planning agent. Assess the total travel budget
+                        and determine if approval is required.""")
+                .responseSchema(BudgetAssessmentResult.class)
+                .build();
+
         return Worker.builder()
                 .name("budget-assessment-agent")
                 .capabilities(List.of(cap("budget-assessment")))
-                .function((Map<String, Object> input) -> {
-                    int totalCost = 3500; // stub mid-range cost
-                    return WorkerResult.of(Map.of(
-                            "totalCost", totalCost,
-                            "requiresApproval", totalCost > 2000,
-                            "isHighValue", totalCost > 5000
-                    ));
-                })
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
-     * Books selected flights and hotels. Returns {@code {declined: true}} when the
-     * context has {@code simulateDecline == true} to demonstrate DECLINE recovery.
+     * Books selected flights and hotels.
+     *
+     * <p>Uses OpenClaw's LLM API to book the selected flights and hotels.
+     * If booking fails, sets declined=true with a reason.
      */
     private Worker bookingWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("travel-agent"))
+                .systemPrompt("""
+                        You are a travel planning agent. Book the selected flights and hotels.
+                        If booking fails, set declined=true with a reason.""")
+                .responseSchema(TravelBookingResult.class)
+                .build();
+
         return Worker.builder()
                 .name("booking-agent")
                 .capabilities(List.of(cap("booking")))
-                .function((Map<String, Object> input) -> {
-                    Object simulateDecline = input.get("simulateDecline");
-                    if (Boolean.TRUE.equals(simulateDecline)) {
-                        return WorkerResult.of(Map.of(
-                                "declined", true,
-                                "reason", "No availability for selected dates"
-                        ));
-                    }
-                    return WorkerResult.of(Map.of(
-                            "bookingRef", "TRV-" + System.currentTimeMillis(),
-                            "status", "confirmed"
-                    ));
-                })
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
      * Rebooks with alternative dates after a DECLINE.
+     *
+     * <p>Uses OpenClaw's LLM API to rebook after a declined booking,
+     * finding alternative dates.
      */
     private Worker rebookingWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("travel-agent"))
+                .systemPrompt("""
+                        You are a travel planning agent. Rebook after a declined booking,
+                        finding alternative dates.""")
+                .responseSchema(RebookingResult.class)
+                .build();
+
         return Worker.builder()
                 .name("rebooking-agent")
                 .capabilities(List.of(cap("rebooking")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "bookingRef", "TRV-ALT-" + System.currentTimeMillis(),
-                        "status", "confirmed",
-                        "alternativeDates", true
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 
     /**
      * Confirms booking and sends itinerary.
+     *
+     * <p>Uses OpenClaw's LLM API to confirm the travel itinerary and
+     * send confirmation details.
      */
     private Worker confirmationWorker() {
+        final Agent agent = Agent.builder()
+                .model(openClawFactory.forAgent("travel-agent"))
+                .systemPrompt("""
+                        You are a travel planning agent. Confirm the travel itinerary and
+                        send confirmation details.""")
+                .responseSchema(ConfirmationResult.class)
+                .build();
+
         return Worker.builder()
                 .name("confirmation-agent")
                 .capabilities(List.of(cap("confirmation")))
-                .function((Map<String, Object> input) -> WorkerResult.of(Map.of(
-                        "confirmed", true,
-                        "itinerarySent", true,
-                        "confirmationRef", "CONF-" + System.currentTimeMillis()
-                )))
+                .function(new AgentWorkerFunction(agent))
                 .build();
+    }
+
+    private AgentDescriptor travelDescriptor() {
+        return new AgentDescriptor(
+                "openclaw:travel-agent@1",       // agentId
+                "OpenClaw Travel Agent",         // name
+                "1",                             // version
+                "openclaw",                      // provider
+                "openclaw",                      // modelFamily
+                null,                            // modelVersion
+                null,                            // weightsFingerprint
+                null,                            // domainVocabulary
+                null,                            // slotVocabulary
+                null,                            // dispositionVocabulary
+                null,                            // axisVocabularies
+                "casehubio/life/travel",         // slot
+                List.of(),                       // capabilities
+                null,                            // disposition
+                "GB",                            // jurisdiction
+                null,                            // dataHandlingPolicy
+                tenancyId,                       // tenancyId
+                "Travel planning and booking agent"  // briefing
+        );
     }
 }

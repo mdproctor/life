@@ -50,7 +50,7 @@ class HomeMaintenanceCaseDefinitionsTest {
     @Test
     void hasFiveCapabilities() {
         var names = def.getCapabilities()
-                .stream().map(c -> c.getName()).toList();
+                .stream().map(c -> c.name()).toList();
         assertEquals(5, names.size());
         assertTrue(names.containsAll(List.of(
                 "schedule-inspection", "get-quotes", "issue-commitment",

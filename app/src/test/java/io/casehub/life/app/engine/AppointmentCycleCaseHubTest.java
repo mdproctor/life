@@ -58,7 +58,7 @@ class AppointmentCycleCaseHubTest {
     @Test
     void hasFiveCapabilities() {
         var names = caseHub.getDefinition().getCapabilities()
-                .stream().map(c -> c.getName()).toList();
+                .stream().map(c -> c.name()).toList();
         assertEquals(5, names.size());
         assertTrue(names.containsAll(List.of(
                 "book-appointment", "find-alternative", "confirm-appointment",
@@ -101,7 +101,7 @@ class AppointmentCycleCaseHubTest {
     void hasFiveWorkers() {
         var workers = caseHub.getDefinition().getWorkers();
         assertEquals(5, workers.size(), "Exactly 5 workers expected — size catches double-augmentation");
-        var names = Set.copyOf(workers.stream().map(w -> w.getName()).toList());
+        var names = Set.copyOf(workers.stream().map(w -> w.name()).toList());
         assertEquals(Set.of(
                 "book-appointment-agent", "find-alternative-agent",
                 "confirm-appointment-agent", "pre-visit-prep-agent",
@@ -109,23 +109,22 @@ class AppointmentCycleCaseHubTest {
     }
 
     @Test
-    void bookAppointmentWorkerHasAgentDescriptor() {
-        // Worker.Builder.build() does not enforce agentDescriptor — it is silently nullable.
+    void caseDefinitionHasAgentDescriptor() {
+        // After engine#543, AgentDescriptor moved from Worker to CaseDefinition.agentDescriptors.
         // This test enforces the architectural requirement: every LLM-backed worker must
-        // carry an AgentDescriptor so the trust system and attestation pipeline can
-        // attribute outcomes to the correct agent.
-        final var worker = caseHub.getDefinition().getWorkers().stream()
-                .filter(w -> "book-appointment-agent".equals(w.getName()))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("book-appointment-agent not found"));
+        // have a corresponding AgentDescriptor registered on the CaseDefinition so the trust
+        // system and attestation pipeline can attribute outcomes to the correct agent.
+        final var def = caseHub.getDefinition();
 
-        assertThat(worker.agentDescriptor())
-                .as("book-appointment-agent must carry an AgentDescriptor")
-                .isNotNull();
-        assertThat(worker.agentDescriptor().agentId())
+        assertThat(def.agentDescriptorFor("openclaw:health-agent@1"))
+                .as("CaseDefinition must have agentDescriptor for openclaw:health-agent@1")
+                .isPresent();
+
+        final var descriptor = def.agentDescriptorFor("openclaw:health-agent@1").orElseThrow();
+        assertThat(descriptor.agentId())
                 .as("agentId must follow {model-family}:{persona}@{major} convention")
                 .isEqualTo("openclaw:health-agent@1");
-        assertThat(worker.agentDescriptor().provider()).isEqualTo("openclaw");
-        assertThat(worker.agentDescriptor().slot()).isEqualTo("casehubio/life/health");
+        assertThat(descriptor.provider()).isEqualTo("openclaw");
+        assertThat(descriptor.slot()).isEqualTo("casehubio/life/health");
     }
 }

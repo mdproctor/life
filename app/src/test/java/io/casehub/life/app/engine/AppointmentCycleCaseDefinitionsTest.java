@@ -46,7 +46,7 @@ class AppointmentCycleCaseDefinitionsTest {
     void hasFiveCapabilities() {
         CaseDefinition def = AppointmentCycleCaseDefinitions.appointmentCycle();
         assertEquals(5, def.getCapabilities().size());
-        var names = def.getCapabilities().stream().map(c -> c.getName()).toList();
+        var names = def.getCapabilities().stream().map(c -> c.name()).toList();
         assertTrue(names.contains("book-appointment"));
         assertTrue(names.contains("find-alternative"));
         assertTrue(names.contains("confirm-appointment"));

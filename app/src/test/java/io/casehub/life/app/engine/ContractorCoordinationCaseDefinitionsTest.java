@@ -49,7 +49,7 @@ class ContractorCoordinationCaseDefinitionsTest {
     @Test
     void hasFiveCapabilities() {
         var names = def.getCapabilities()
-                .stream().map(c -> c.getName()).toList();
+                .stream().map(c -> c.name()).toList();
         assertEquals(5, names.size());
         assertTrue(names.containsAll(List.of(
                 "request-quote", "watchdog-escalation", "quote-received",

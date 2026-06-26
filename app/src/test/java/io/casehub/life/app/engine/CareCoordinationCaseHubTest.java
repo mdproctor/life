@@ -55,7 +55,7 @@ class CareCoordinationCaseHubTest {
     @Test
     void hasThreeCapabilities() {
         var names = caseHub.getDefinition().getCapabilities()
-                .stream().map(c -> c.getName()).toList();
+                .stream().map(c -> c.name()).toList();
         assertEquals(3, names.size());
         assertTrue(names.containsAll(List.of(
                 "needs-assessment", "care-plan", "health-check")));
@@ -162,7 +162,7 @@ class CareCoordinationCaseHubTest {
     void hasThreeWorkers() {
         var workers = caseHub.getDefinition().getWorkers();
         assertEquals(3, workers.size(), "Exactly 3 workers expected — size catches double-augmentation");
-        var names = Set.copyOf(workers.stream().map(w -> w.getName()).toList());
+        var names = Set.copyOf(workers.stream().map(w -> w.name()).toList());
         assertEquals(Set.of(
                 "needs-assessment-agent", "care-plan-agent",
                 "health-check-agent"), names);

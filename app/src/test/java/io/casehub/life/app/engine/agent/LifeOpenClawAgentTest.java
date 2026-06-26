@@ -5,10 +5,10 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
-import io.casehub.api.model.WorkerResult;
 import io.casehub.api.model.ai.Agent;
 import io.casehub.api.model.ai.ChatModelProvider;
 import io.casehub.api.model.ai.ModelType;
+import io.casehub.worker.api.WorkerResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

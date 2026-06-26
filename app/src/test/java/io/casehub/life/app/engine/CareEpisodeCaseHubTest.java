@@ -54,7 +54,7 @@ class CareEpisodeCaseHubTest {
     @Test
     void hasTwoCapabilities() {
         var names = caseHub.getDefinition().getCapabilities()
-                .stream().map(c -> c.getName()).toList();
+                .stream().map(c -> c.name()).toList();
         assertEquals(2, names.size());
         assertTrue(names.containsAll(List.of(
                 "assess-patient", "provide-care")));
@@ -95,7 +95,7 @@ class CareEpisodeCaseHubTest {
     void hasTwoWorkers() {
         var workers = caseHub.getDefinition().getWorkers();
         assertEquals(2, workers.size(), "Exactly 2 workers expected — size catches double-augmentation");
-        var names = Set.copyOf(workers.stream().map(w -> w.getName()).toList());
+        var names = Set.copyOf(workers.stream().map(w -> w.name()).toList());
         assertEquals(Set.of(
                 "assess-patient-agent", "provide-care-agent"), names);
     }

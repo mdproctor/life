@@ -16,13 +16,13 @@
 package io.casehub.life.app.engine;
 
 import io.casehub.api.model.Binding;
-import io.casehub.api.model.Capability;
 import io.casehub.api.model.CaseDefinition;
 import io.casehub.api.model.ContextChangeTrigger;
 import io.casehub.api.model.Goal;
 import io.casehub.api.model.GoalExpression;
 import io.casehub.api.model.GoalKind;
 import io.casehub.api.model.HumanTaskTarget;
+import io.casehub.worker.api.Capability;
 
 import java.time.Duration;
 import java.util.Set;
@@ -149,12 +149,11 @@ public final class HomeMaintenanceCaseDefinitions {
 
     private static Capability cap(String name, String description,
                                   String inputSchema, String outputSchema) {
-        Capability c = Capability.builder()
+        return Capability.builder()
                 .name(name)
+                .description(description)
                 .inputSchema(inputSchema)
                 .outputSchema(outputSchema)
                 .build();
-        c.setDescription(description);
-        return c;
     }
 }
