@@ -2,8 +2,10 @@ package io.casehub.life.app.infrastructure;
 
 import io.casehub.qhorus.api.channel.ChannelSemantic;
 import io.casehub.qhorus.api.gateway.ChannelRef;
+import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.api.watchdog.WatchdogConditionType;
 import io.casehub.qhorus.runtime.channel.Channel;
+import io.casehub.qhorus.runtime.channel.ChannelCreateRequest;
 import io.casehub.qhorus.runtime.channel.ChannelService;
 import io.casehub.qhorus.runtime.gateway.ChannelGateway;
 import io.casehub.qhorus.runtime.store.WatchdogStore;
@@ -16,6 +18,7 @@ import jakarta.transaction.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -45,9 +48,10 @@ public class LifeChannelInitializer {
     @Transactional
     void onStart(@Observes final StartupEvent ev) {
         ensureChannelWithWatchdog(DELEGATION_CHANNEL,
-                List.of("household-admin", "household-member"), null);
+                List.of("household-admin", "household-member", "life-system"), null);
         ensureChannelWithWatchdog(OVERSIGHT_CHANNEL,
-                List.of("household-admin"), "COMMAND,RESPONSE");
+                List.of("household-admin", "life-system"),
+                Set.of(MessageType.COMMAND, MessageType.RESPONSE));
     }
 
     /**
@@ -58,7 +62,8 @@ public class LifeChannelInitializer {
     @Transactional
     public UUID ensureActorChannel(final UUID externalActorId) {
         final String name = "life/actor/ext-" + externalActorId;
-        return ensureChannelWithWatchdog(name, List.of("household-admin", "household-member"), null);
+        return ensureChannelWithWatchdog(name,
+                List.of("household-admin", "household-member", "life-system"), null);
     }
 
     /**
@@ -74,7 +79,7 @@ public class LifeChannelInitializer {
     private UUID ensureChannelWithWatchdog(
             final String name,
             final List<String> writers,
-            final String allowedTypes) {
+            final Set<MessageType> allowedTypes) {
         final String writersStr = String.join(",", writers);
         // ChannelService.create() does NOT register in ChannelGateway (GE-20260526-5247f2).
         // Always call initChannel() after create or find.
@@ -84,9 +89,15 @@ public class LifeChannelInitializer {
                     return ch.id;
                 })
                 .orElseGet(() -> {
-                    final Channel ch = channelService.create(
-                            name, name, ChannelSemantic.APPEND,
-                            writersStr, null, allowedTypes);
+                    final ChannelCreateRequest.Builder reqBuilder =
+                            ChannelCreateRequest.builder(name)
+                                    .description(name)
+                                    .semantic(ChannelSemantic.APPEND)
+                                    .allowedWriters(writersStr);
+                    if (allowedTypes != null) {
+                        reqBuilder.allowedTypes(allowedTypes);
+                    }
+                    final Channel ch = channelService.create(reqBuilder.build());
                     channelGateway.initChannel(ch.id, new ChannelRef(ch.id, ch.name));
                     // One APPROVAL_PENDING Watchdog per channel — thresholdSeconds=0 fires
                     // as soon as any Commitment.expiresAt passes.
