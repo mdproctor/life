@@ -22,6 +22,9 @@ public class ExternalActorErasureLedgerEntry extends LedgerEntry {
     @Column(name = "erased_by", nullable = false, length = 255)
     public String erasedBy;
 
+    @Column(name = "memory_records_erased", nullable = false)
+    public int memoryRecordsErased;
+
     @Override
     protected byte[] domainContentBytes() {
         return String.join("|",

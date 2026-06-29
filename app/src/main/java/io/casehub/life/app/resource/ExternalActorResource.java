@@ -7,6 +7,7 @@ import io.casehub.life.api.request.UpdateExternalActorRequest;
 import io.casehub.life.api.response.ExternalActorResponse;
 import io.casehub.life.api.response.LifeTaskContextResponse;
 import io.casehub.life.app.service.ExternalActorService;
+import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.smallrye.common.annotation.Blocking;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -37,6 +38,9 @@ public class ExternalActorResource {
 
     @Inject
     ExternalActorService service;
+
+    @Inject
+    CurrentPrincipal currentPrincipal;
 
     @POST
     @RolesAllowed({HouseholdGroups.ADMIN, HouseholdGroups.MEMBER})
@@ -83,7 +87,7 @@ public class ExternalActorResource {
     @Path("/{id}/personal-data")
     @RolesAllowed(HouseholdGroups.ADMIN)
     public Response erasePersonalData(@PathParam("id") final UUID id) {
-        service.erase(id);
+        service.erase(id, currentPrincipal.actorId());
         return Response.noContent().build();
     }
 

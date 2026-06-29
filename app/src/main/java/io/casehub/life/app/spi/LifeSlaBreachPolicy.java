@@ -5,7 +5,7 @@ import io.casehub.life.api.LifeSlaPolicy;
 import io.casehub.life.app.entity.LifeTaskContext;
 import io.casehub.work.api.BreachDecision;
 import io.casehub.work.api.SlaBreachContext;
-import io.casehub.work.api.SlaBreachPolicy;
+import io.casehub.work.api.spi.SlaBreachPolicy;
 import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped

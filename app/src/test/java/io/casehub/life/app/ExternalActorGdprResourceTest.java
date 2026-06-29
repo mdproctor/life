@@ -2,6 +2,7 @@ package io.casehub.life.app;
 
 import io.casehub.ledger.runtime.repository.LedgerEntryRepository;
 import io.casehub.platform.api.identity.TenancyConstants;
+import io.casehub.platform.testing.FixedCurrentPrincipal;
 import io.casehub.life.api.LifeActorType;
 import io.casehub.life.api.LifeDomain;
 import io.casehub.life.app.entity.ExternalActor;
@@ -13,6 +14,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.security.TestSecurity;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -26,16 +28,23 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 
 @QuarkusTest
-@TestSecurity(user = "household-admin", roles = {"household-admin"})
+@TestSecurity(user = "jane.admin", roles = {"household-admin"})
 class ExternalActorGdprResourceTest {
 
     @Inject LedgerEntryRepository ledgerRepository;
     @Inject WorkItemService workItemService;
+    @Inject FixedCurrentPrincipal fixedPrincipal;
 
     @BeforeEach
     @Transactional
-    void seedTemplate() {
+    void setUp() {
         LifeTestFixtures.seedStandardTemplates();
+        fixedPrincipal.setActorId("jane.admin");
+    }
+
+    @AfterEach
+    void tearDown() {
+        fixedPrincipal.reset();
     }
 
     @Test
@@ -64,8 +73,9 @@ class ExternalActorGdprResourceTest {
         assertThat(entry).isInstanceOf(io.casehub.life.app.ledger.ExternalActorErasureLedgerEntry.class);
         var erasure = (io.casehub.life.app.ledger.ExternalActorErasureLedgerEntry) entry;
         assertThat(erasure.erasedActorId).isEqualTo(actorId);
-        assertThat(erasure.erasedBy).isEqualTo("household-admin");
+        assertThat(erasure.erasedBy).isEqualTo("jane.admin");
         assertThat(erasure.contactMethod).isEqualTo("phone");
+        assertThat(erasure.memoryRecordsErased).isZero();
     }
 
     @Test

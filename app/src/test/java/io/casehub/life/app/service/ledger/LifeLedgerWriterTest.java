@@ -40,7 +40,7 @@ class LifeLedgerWriterTest {
 
     @Test
     void writeErasureEntry_setsRequiredFields() {
-        writer.writeErasureEntry(externalActor(), "household-admin");
+        writer.writeErasureEntry(externalActor(), "household-admin", 0);
 
         var entry = captureErasure();
         assertThat(entry.erasedActorId).isEqualTo(ACTOR_ID);
@@ -52,6 +52,14 @@ class LifeLedgerWriterTest {
         assertThat(entry.actorRole).isEqualTo("GdprDataController");
         assertThat(entry.sequenceNumber).isEqualTo(1);
         assertThat(entry.entryType).isEqualTo(LedgerEntryType.EVENT);
+    }
+
+    @Test
+    void writeErasureEntry_setsMemoryRecordsErased() {
+        writer.writeErasureEntry(externalActor(), "household-admin", 7);
+
+        var entry = captureErasure();
+        assertThat(entry.memoryRecordsErased).isEqualTo(7);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────

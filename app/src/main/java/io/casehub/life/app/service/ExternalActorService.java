@@ -10,10 +10,14 @@ import io.casehub.life.api.response.LifeTaskContextResponse;
 import io.casehub.life.app.entity.ExternalActor;
 import io.casehub.life.app.entity.LifeTaskContext;
 import io.casehub.life.app.service.ledger.LifeLedgerWriter;
+import io.casehub.platform.api.identity.TenancyConstants;
+import io.casehub.platform.api.memory.CaseMemoryStore;
+import io.casehub.platform.api.memory.MemoryCapabilityException;
 import io.casehub.work.runtime.model.WorkItem;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.jboss.logging.Logger;
 import jakarta.ws.rs.ClientErrorException;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.WebApplicationException;
@@ -28,11 +32,16 @@ import java.util.UUID;
 @ApplicationScoped
 public class ExternalActorService {
 
+    private static final Logger LOG = Logger.getLogger(ExternalActorService.class);
+
     @Inject
     LifeLedgerWriter lifeLedgerWriter;
 
     @Inject
     TrustGateService trustGateService;
+
+    @Inject
+    CaseMemoryStore memoryStore;
 
     @Transactional
     public ExternalActorResponse create(final CreateExternalActorRequest req) {
@@ -81,7 +90,7 @@ public class ExternalActorService {
     }
 
     @Transactional
-    public void erase(final UUID id) {
+    public void erase(final UUID id, final String erasedBy) {
         final ExternalActor actor = ExternalActor.<ExternalActor>findByIdOptional(id)
                 .orElseThrow(NotFoundException::new);
 
@@ -106,7 +115,16 @@ public class ExternalActorService {
         actor.contactValue = "[ERASED]";
         actor.gdprErasedAt = Instant.now();
 
-        lifeLedgerWriter.writeErasureEntry(actor, "household-admin");
+        int memoryRecordsErased;
+        try {
+            memoryRecordsErased = memoryStore.eraseEntity(
+                    LifeActorIds.of(id), TenancyConstants.DEFAULT_TENANT_ID);
+        } catch (MemoryCapabilityException e) {
+            LOG.debugf("Memory store does not support eraseEntity: %s", e.getMessage());
+            memoryRecordsErased = 0;
+        }
+
+        lifeLedgerWriter.writeErasureEntry(actor, erasedBy, memoryRecordsErased);
     }
 
     public List<LifeTaskContextResponse> listTasks(final UUID actorId) {

@@ -18,12 +18,14 @@ public class LifeLedgerWriter {
     @Inject
     LedgerEntryRepository ledgerRepository;
 
-    public void writeErasureEntry(final ExternalActor actor, final String erasedBy) {
+    public void writeErasureEntry(final ExternalActor actor, final String erasedBy,
+                                   final int memoryRecordsErased) {
         ExternalActorErasureLedgerEntry entry = new ExternalActorErasureLedgerEntry();
         populateBase(entry, actor.id, erasedBy, ActorType.HUMAN, "GdprDataController");
         entry.erasedActorId = actor.id;
         entry.contactMethod = actor.contactMethod;
         entry.erasedBy = erasedBy;
+        entry.memoryRecordsErased = memoryRecordsErased;
         ledgerRepository.save(entry, TenancyConstants.DEFAULT_TENANT_ID);
     }
 

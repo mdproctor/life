@@ -179,6 +179,12 @@
       <artifactId>quarkus-test-security</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- @InjectMock — replaces CDI beans with Mockito mocks in @QuarkusTest -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-junit5-mockito</artifactId>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>io.rest-assured</groupId>
       <artifactId>rest-assured</artifactId>
