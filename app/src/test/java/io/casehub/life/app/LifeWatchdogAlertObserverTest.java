@@ -86,7 +86,8 @@ class LifeWatchdogAlertObserverTest {
     void onAlert_oversight_createsEscalationTaskAndMarksExpired() {
         final String correlationId = insertRecord("life/del-obs-oversight", CommitmentMode.OVERSIGHT,
                 r -> {
-                    r.delegateTo = "Buy new car:household-task";
+                    r.oversightKey = "Buy new car:household-task";
+                    r.domain = io.casehub.life.api.LifeDomain.FINANCE;
                     r.amountThreshold = java.math.BigDecimal.valueOf(5000);
                     r.purchaseCategory = "vehicle";
                 });
@@ -105,7 +106,9 @@ class LifeWatchdogAlertObserverTest {
     // --- Title branch coverage ---
 
     @Test
-    void onAlert_delegation_colonPrefix_producesOversightExpiredTitle() {
+    void onAlert_delegation_withColonInDelegateTo_usesFullDelegateInTitle() {
+        // After Task 5: delegateTo is always a principal ID for DELEGATION records.
+        // Colon no longer triggers oversight template — it is treated as a regular delegate name.
         final String correlationId = insertRecord("life/del-obs-colon", CommitmentMode.DELEGATION,
                 r -> r.delegateTo = "life:system-key");
         final long workItemsBefore = WorkItem.count();
@@ -113,7 +116,7 @@ class LifeWatchdogAlertObserverTest {
         observer.onAlert(approvalPendingEvent("life/del-obs-colon"));
 
         assertThat(WorkItem.count()).isEqualTo(workItemsBefore + 1);
-        assertThat(latestWorkItemTitle()).isEqualTo("Oversight gate expired — request not approved");
+        assertThat(latestWorkItemTitle()).isEqualTo("life:system-key has not confirmed — action required");
     }
 
     @Test

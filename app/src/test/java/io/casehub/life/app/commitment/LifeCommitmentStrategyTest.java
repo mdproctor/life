@@ -1,5 +1,6 @@
 package io.casehub.life.app.commitment;
 
+import io.casehub.life.api.LifeDomain;
 import io.casehub.life.api.request.CommitmentRequest;
 import io.casehub.life.api.request.CreateLifeTaskRequest;
 import io.casehub.life.api.request.OversightGateRequest;
@@ -39,7 +40,7 @@ class LifeCommitmentStrategyTest {
     @Test
     void oversightContext_onlyOversightApplies() {
         final var ctx = new OversightContext(
-                new OversightGateRequest(Instant.now().plusSeconds(3600),
+                new OversightGateRequest(LifeDomain.FINANCE, Instant.now().plusSeconds(3600),
                         new CreateLifeTaskRequest("household-task", "Buy groceries", null, null), null, null));
         assertThat(delegation.applies(ctx)).isFalse();
         assertThat(contractor.applies(ctx)).isFalse();
@@ -82,7 +83,7 @@ class LifeCommitmentStrategyTest {
                 null, null, null);
         // Oversight
         final var oversightCtx = new OversightContext(
-                new OversightGateRequest(Instant.now().plusSeconds(3600),
+                new OversightGateRequest(LifeDomain.FINANCE, Instant.now().plusSeconds(3600),
                         new CreateLifeTaskRequest("household-task", "Title", null, null), null, null));
 
         // Each strategy applies to exactly one context type

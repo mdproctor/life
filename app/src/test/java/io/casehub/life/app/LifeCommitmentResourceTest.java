@@ -177,6 +177,7 @@ class LifeCommitmentResourceTest {
                 .contentType("application/json")
                 .body("""
                         {
+                          "domain":"FINANCE",
                           "deadline":"%s",
                           "pendingTask":{"templateRef":"household-task","title":"Buy new sofa"},
                           "amountThreshold":1500.00,
@@ -195,6 +196,7 @@ class LifeCommitmentResourceTest {
     void oversightGate_duplicate_returns409() {
         final String body = """
                 {
+                  "domain":"FINANCE",
                   "deadline":"%s",
                   "pendingTask":{"templateRef":"household-task","title":"Duplicate gate task"},
                   "amountThreshold":500.00,

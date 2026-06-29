@@ -787,7 +787,7 @@ Not closed here: tamper-evident audit of commitment decisions (Layer 4), multi-s
 
 - **Why LifeCommitmentStrategy SPI in app/, not api/:** sealed context types reference JPA entities. Placing them in `api/` creates a circular Maven dependency. No external consumers — CDI `Instance<>` collects all three implementations.
 - **Why OversightContext carries no WorkItem:** the oversight gate is pre-approval. No WorkItem exists until household-admin RESPONSE. Work that hasn't been approved yet is not a WorkItem.
-- **Why `delegateTo` column repurposed as dedup key for OVERSIGHT mode:** partial unique index enforces at DB level. Acknowledged semantic overload — a dedicated `oversight_key` column would be cleaner.
+- **Why `oversightKey` column:** resolved the `delegateTo` semantic overload (life#30). OVERSIGHT mode dedup keys now live in `oversightKey`; `delegateTo` is DELEGATION-only (principal ID).
 
 #### Pattern introduced
 

@@ -1,6 +1,6 @@
 package io.casehub.life.app.observer;
 
-import io.casehub.life.api.LifeDomain;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.casehub.life.api.commitment.CommitmentMode;
 import io.casehub.life.api.commitment.CommitmentStatus;
 import io.casehub.life.api.request.CreateLifeTaskRequest;
@@ -20,9 +20,6 @@ import org.jboss.logging.Logger;
 
 import java.time.Instant;
 import java.util.List;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Creates escalation WorkItems when an APPROVAL_PENDING Watchdog fires.
@@ -58,9 +55,9 @@ public class LifeWatchdogAlertObserver {
                 .findExpiredPendingByChannel(event.notificationChannel(), Instant.now());
 
         for (final LifeCommitmentRecord record : expired) {
-            if (record.mode == CommitmentMode.OVERSIGHT) {
+            if (record.mode == CommitmentMode.OVERSIGHT && record.domain != null) {
                 ledgerHandlers.stream()
-                        .filter(h -> h.domain() == LifeDomain.FINANCE)
+                        .filter(h -> h.domain() == record.domain)
                         .findFirst()
                         .ifPresent(h -> h.writeEntry(LifeDecisionEventType.SLA_BREACH, record));
             }
@@ -74,13 +71,8 @@ public class LifeWatchdogAlertObserver {
     private void createEscalationTask(final LifeCommitmentRecord record) {
         final String title;
         if (record.mode == CommitmentMode.DELEGATION) {
-            final String delegate = record.delegateTo;
-            // delegateTo semantic overload: oversight keys contain ":"
-            // Task 5 will separate oversightKey from delegateTo.
-            title = delegate != null && delegate.contains(":")
-                    ? CommitmentMode.OVERSIGHT.escalationTemplate()
-                    : record.mode.escalationTemplate().formatted(
-                        delegate != null ? delegate : "Unknown");
+            title = record.mode.escalationTemplate().formatted(
+                    record.delegateTo != null ? record.delegateTo : "Unknown");
         } else {
             title = record.mode.escalationTemplate();
         }

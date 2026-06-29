@@ -1,5 +1,6 @@
 package io.casehub.life.app.entity;
 
+import io.casehub.life.api.LifeDomain;
 import io.casehub.life.api.commitment.CommitmentMode;
 import io.casehub.life.api.commitment.CommitmentStatus;
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
@@ -40,7 +41,14 @@ public class LifeCommitmentRecord extends PanacheEntityBase {
     public UUID externalActorId;        // CONTRACTOR only
 
     @Column(name = "delegate_to", length = 255)
-    public String delegateTo;           // DELEGATION: principal id; OVERSIGHT: dedup key
+    public String delegateTo;           // DELEGATION: principal id; null for other modes
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 50)
+    public LifeDomain domain;
+
+    @Column(name = "oversight_key", length = 255)
+    public String oversightKey;         // OVERSIGHT only: dedup key (title:templateRef)
 
     @Column(name = "channel_id", nullable = false, length = 255)
     public String channelId;

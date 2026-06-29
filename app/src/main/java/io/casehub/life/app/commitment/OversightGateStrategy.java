@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.casehub.life.api.commitment.CommitmentMode;
 import io.casehub.life.api.commitment.CommitmentOutcome;
 import io.casehub.life.api.commitment.CommitmentStatus;
-import io.casehub.life.api.LifeDomain;
 import io.casehub.life.app.LifeDecisionEventType;
 import io.casehub.life.app.entity.LifeCommitmentRecord;
 import io.casehub.life.app.infrastructure.LifeChannelInitializer;
@@ -51,7 +50,7 @@ public class OversightGateStrategy implements LifeCommitmentStrategy {
         final String taskKey = oc.request().pendingTask().title()
                 + ":" + oc.request().pendingTask().templateRef();
         final boolean duplicate = LifeCommitmentRecord
-                .find("mode = ?1 and status = ?2 and delegateTo = ?3",
+                .find("mode = ?1 and status = ?2 and oversightKey = ?3",
                         CommitmentMode.OVERSIGHT, CommitmentStatus.PENDING_RESPONSE, taskKey)
                 .count() > 0;
         if (duplicate) {
@@ -87,7 +86,9 @@ public class OversightGateStrategy implements LifeCommitmentStrategy {
         // workItemId null until household-admin RESPONSE
         record.channelId = LifeChannelInitializer.OVERSIGHT_CHANNEL;
         record.deadline = oc.request().deadline();
-        record.delegateTo = taskKey;       // repurposed as dedup key for oversight gates
+        record.delegateTo = null;
+        record.domain = oc.request().domain();
+        record.oversightKey = taskKey;
         record.amountThreshold = oc.request().amountThreshold();
         record.purchaseCategory = oc.request().purchaseCategory();
         record.pendingTaskJson = pendingTaskJson;
@@ -95,7 +96,7 @@ public class OversightGateStrategy implements LifeCommitmentStrategy {
         record.persist();
 
         ledgerHandlers.stream()
-                .filter(h -> h.domain() == LifeDomain.FINANCE)
+                .filter(h -> h.domain() == oc.request().domain())
                 .findFirst()
                 .ifPresent(h -> h.writeEntry(LifeDecisionEventType.CREATED, record));
 

@@ -54,6 +54,7 @@ public class ContractorCommitmentStrategy implements LifeCommitmentStrategy {
         record.status = CommitmentStatus.PENDING_RESPONSE;
         record.workItemId = cc.workItem().id;
         record.externalActorId = cc.externalActor().id;
+        record.domain = cc.taskContext() != null ? cc.taskContext().domain : null;
         record.channelId = actorChannelName;
         record.deadline = cc.request().deadline();
         record.createdAt = record.updatedAt = Instant.now();

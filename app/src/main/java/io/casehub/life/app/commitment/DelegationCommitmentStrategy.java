@@ -55,6 +55,7 @@ public class DelegationCommitmentStrategy implements LifeCommitmentStrategy {
         record.status = CommitmentStatus.PENDING_RESPONSE;
         record.workItemId = dc.workItem().id;
         record.delegateTo = dc.request().delegateTo();
+        record.domain = dc.taskContext() != null ? dc.taskContext().domain : null;
         record.channelId = LifeChannelInitializer.DELEGATION_CHANNEL;
         record.deadline = dc.request().deadline();
         record.createdAt = record.updatedAt = Instant.now();

@@ -157,6 +157,7 @@ class CommitmentLifecycleScenarioTest {
                 .contentType("application/json")
                 .body("""
                         {
+                          "domain":"FINANCE",
                           "deadline":"%s",
                           "pendingTask":{"templateRef":"household-task","title":"Buy electric car"},
                           "amountThreshold":35000.00,
