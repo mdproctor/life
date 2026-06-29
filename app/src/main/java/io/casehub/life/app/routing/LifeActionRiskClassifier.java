@@ -71,22 +71,8 @@ public class LifeActionRiskClassifier implements ActionRiskClassifier {
         return amount >= threshold ? buildGate(type, action, prefs) : new RiskDecision.Autonomous();
     }
 
-    // ThresholdCategory removed from HouseholdActionType in #27 — switch directly on type.
-    // This method is interim: replaced by per-type HouseholdRiskRule implementations in Plan B.
     private double resolveThreshold(HouseholdActionType type, Preferences prefs, boolean admin) {
-        return switch (type) {
-            case SPEND_PURCHASE, SPEND_SUBSCRIPTION_MODIFY ->
-                prefs.get(admin ? LifeRiskPolicyKeys.ADMIN_SPEND_THRESHOLD
-                                : LifeRiskPolicyKeys.SPEND_THRESHOLD).value();
-            case BOOKING_REFUNDABLE ->
-                prefs.get(admin ? LifeRiskPolicyKeys.ADMIN_BOOKING_THRESHOLD
-                                : LifeRiskPolicyKeys.BOOKING_THRESHOLD).value();
-            case CONTRACTOR_ENGAGE ->
-                prefs.get(admin ? LifeRiskPolicyKeys.ADMIN_CONTRACTOR_THRESHOLD
-                                : LifeRiskPolicyKeys.CONTRACTOR_THRESHOLD).value();
-            default -> throw new IllegalStateException(
-                "resolveThreshold called for non-AMOUNT_THRESHOLD type: " + type);
-        };
+        return HouseholdActionThresholdKeys.forType(type).resolve(prefs, admin);
     }
 
     private boolean isAdmin() {
@@ -124,31 +110,7 @@ public class LifeActionRiskClassifier implements ActionRiskClassifier {
     }
 
     private String buildReason(HouseholdActionType type, PlannedAction action) {
-        String amt = formatAmount(action.parameters());
-        return switch (type) {
-            case SPEND_PURCHASE, SPEND_SUBSCRIPTION_MODIFY ->
-                "Spend of " + amt + " requires household approval";
-            case SPEND_SUBSCRIPTION_CANCEL ->
-                "Subscription cancellation — confirm before proceeding";
-            case BOOKING_NONREFUNDABLE -> {
-                String amtStr = action.parameters().containsKey("amount") ? " of " + amt : "";
-                yield "Non-refundable booking" + amtStr + " — cannot be undone once confirmed";
-            }
-            case BOOKING_REFUNDABLE ->
-                "Refundable booking of " + amt + " requires household approval";
-            case HEALTH_APPOINTMENT_SPECIALIST ->
-                "Specialist appointment referral — confirm before booking";
-            case HEALTH_APPOINTMENT_GP ->
-                throw new IllegalStateException("buildReason called for non-gated type: " + type);
-            case HEALTH_MEDICATION_FLAG ->
-                "Medication concern — family awareness required before any action";
-            case CONTRACTOR_ENGAGE ->
-                "Contractor instruction estimated at " + amt + " — approval required";
-            case LEGAL_DOCUMENT_SUBMIT ->
-                "Legal document submission — confirm before filing (irreversible)";
-            case ELDER_CARE_DECISION ->
-                "Care decision for dependent — family approval required";
-        };
+        return type.reasonTemplate().formatted(formatAmount(action.parameters()));
     }
 
     private String formatAmount(Map<String, Object> context) {
