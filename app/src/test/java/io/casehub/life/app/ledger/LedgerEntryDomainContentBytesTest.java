@@ -17,7 +17,6 @@ class LedgerEntryDomainContentBytesTest {
         var entry = new HealthDecisionLedgerEntry();
         entry.workItemId = UUID.fromString("11111111-0000-0000-0000-000000000001");
         entry.providerId = UUID.fromString("22222222-0000-0000-0000-000000000002");
-        entry.appointmentDate = Instant.parse("2026-06-15T10:00:00Z");
         entry.taskCategory = "GP_APPOINTMENT";
         entry.slaDeadline = Instant.parse("2026-06-20T10:00:00Z");
         entry.eventType = LifeDecisionEventType.COMPLETED;
@@ -45,10 +44,9 @@ class LedgerEntryDomainContentBytesTest {
 
         assertThat(content).isNotEmpty();
         var parts = content.split("\\|", -1);
-        assertThat(parts).hasSize(7);
+        assertThat(parts).hasSize(6);
         assertThat(parts[1]).isEmpty(); // providerId null → ""
-        assertThat(parts[2]).isEmpty(); // appointmentDate null → ""
-        assertThat(parts[6]).isEmpty(); // outcome null → ""
+        assertThat(parts[5]).isEmpty(); // outcome null → ""
     }
 
     @Test

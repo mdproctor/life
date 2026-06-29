@@ -12,6 +12,7 @@ import io.casehub.platform.api.identity.ActorType;
 import io.casehub.work.runtime.model.WorkItem;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.util.Optional;
@@ -25,11 +26,15 @@ public class LegalDomainLedgerHandler implements DomainLedgerHandler {
     @Inject LedgerEntryRepository ledgerRepository;
     @Inject LifeOutcomeAttestationWriter attestationWriter;
 
+    @ConfigProperty(name = "casehub.life.jurisdiction", defaultValue = "GB")
+    String jurisdiction;
+
     // Package-visible constructor for testing with injected deps
     LegalDomainLedgerHandler(LedgerEntryRepository ledgerRepository,
                               LifeOutcomeAttestationWriter attestationWriter) {
         this.ledgerRepository = ledgerRepository;
         this.attestationWriter = attestationWriter;
+        this.jurisdiction = "GB"; // Test constructor default
     }
 
     LegalDomainLedgerHandler() {}
@@ -59,6 +64,7 @@ public class LegalDomainLedgerHandler implements DomainLedgerHandler {
         entry.workItemId     = ctx.workItemId;
         entry.legalObligation = workItem.title;
         entry.filingDeadline  = workItem.expiresAt;
+        entry.jurisdiction   = jurisdiction;
         entry.eventType       = event;
         entry.actionTaken     = event == LifeDecisionEventType.COMPLETED ? workItem.outcome : null;
 

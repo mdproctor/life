@@ -23,9 +23,6 @@ public class HealthDecisionLedgerEntry extends LedgerEntry {
     @Column(name = "provider_id")
     public UUID providerId;
 
-    @Column(name = "appointment_date")
-    public Instant appointmentDate;
-
     @Column(name = "task_category", nullable = false, length = 100)
     public String taskCategory;
 
@@ -44,7 +41,6 @@ public class HealthDecisionLedgerEntry extends LedgerEntry {
         return String.join("|",
             workItemId != null ? workItemId.toString() : "",
             providerId != null ? providerId.toString() : "",
-            appointmentDate != null ? appointmentDate.toString() : "",
             taskCategory != null ? taskCategory : "",
             slaDeadline != null ? slaDeadline.toString() : "",
             eventType != null ? eventType.name() : "",

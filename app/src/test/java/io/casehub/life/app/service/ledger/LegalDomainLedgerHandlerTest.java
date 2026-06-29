@@ -82,4 +82,31 @@ class LegalDomainLedgerHandlerTest {
         assertEquals("File tax return", entry.legalObligation);
         assertEquals(LifeDecisionEventType.SLA_BREACH, entry.eventType);
     }
+
+    @Test void writeEntry_populatesJurisdictionFromConfig() {
+        UUID taskId = UUID.randomUUID();
+        WorkItem workItem = new WorkItem();
+        workItem.id = taskId;
+        workItem.title = "File tax return";
+
+        LifeTaskContext ctx = new LifeTaskContext();
+        ctx.workItemId = taskId;
+        ctx.domain = LifeDomain.LEGAL;
+
+        handler = new LegalDomainLedgerHandler(ledgerRepository, attestationWriter) {
+            @Override protected Optional<LifeTaskContext> findContext(UUID id) {
+                return Optional.of(ctx);
+            }
+        };
+
+        when(ledgerRepository.findLatestBySubjectId(any(), any())).thenReturn(Optional.empty());
+        when(ledgerRepository.save(any(), any())).thenAnswer(i -> i.getArgument(0));
+
+        handler.writeEntry(LifeDecisionEventType.COMPLETED, taskId, workItem);
+
+        ArgumentCaptor<LedgerEntry> captor = ArgumentCaptor.forClass(LedgerEntry.class);
+        verify(ledgerRepository).save(captor.capture(), any());
+        LegalActionLedgerEntry entry = (LegalActionLedgerEntry) captor.getValue();
+        assertEquals("GB", entry.jurisdiction); // Expected to match config default
+    }
 }
