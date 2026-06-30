@@ -23,6 +23,7 @@ import io.casehub.api.model.HumanTaskTarget;
 import io.casehub.api.model.OnThresholdReached;
 import io.casehub.api.model.SubCaseTarget;
 import io.casehub.api.model.evaluator.JQExpressionEvaluator;
+import io.casehub.life.api.LifeCaseType;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
@@ -180,5 +181,10 @@ class TravelPlanCaseHubTest {
                 .orElseThrow();
         assertTrue(binding.getWhen() instanceof JQExpressionEvaluator jq
                 && jq.expression().contains("booking.declined == true"));
+    }
+
+    @Test
+    void lifeCaseType() {
+        assertEquals(LifeCaseType.TRAVEL_PLAN, caseHub.lifeCaseType());
     }
 }

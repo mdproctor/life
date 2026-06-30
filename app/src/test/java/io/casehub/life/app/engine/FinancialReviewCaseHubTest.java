@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.casehub.api.model.evaluator.JQExpressionEvaluator;
+import io.casehub.life.api.LifeCaseType;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
@@ -122,5 +123,10 @@ class FinancialReviewCaseHubTest {
                         && jq.expression().contains("hasAnomalies != true")
                         && jq.expression().contains("oversightDecision != null"),
                 "produce-report binding should handle both paths: no anomalies OR oversight decision received");
+    }
+
+    @Test
+    void lifeCaseType() {
+        assertEquals(LifeCaseType.FINANCIAL_REVIEW, caseHub.lifeCaseType());
     }
 }

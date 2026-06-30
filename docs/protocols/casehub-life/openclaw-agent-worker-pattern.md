@@ -21,27 +21,54 @@ violation_hint: >
   OR agentId is absent, OR agentId does not follow {model-family}:{persona}@{major},
   OR AgentDescriptor is not registered on CaseDefinition
 created: 2026-06-18
-updated: 2026-06-27
+updated: 2026-06-30
 ---
 
-Use `Worker.builder().function(new AgentWorkerFunction(agent))` for workers that call
-OpenClaw's `/hooks/agent` endpoint via the direct-call bridge. The `Agent` is built with
-`Agent.builder().model(openClawFactory.forAgent(AGENT))` where the factory
-produces a `ChatModelProvider` backed by `OpenClawAgentProvider` → `DirectCallBridge` →
-`/hooks/agent` (webhook delivery, virtual thread blocking).
+**Agent worker construction (LLM-backed workers):** Use `LifeTypedCaseHub.agentWorker()` helper
+in `configureCase()` override to build LLM-backed workers. The helper constructs a complete
+`Worker` with `new AgentWorkerFunction(agent)` where the `Agent` is built with
+`Agent.builder().model(openClawFactory.forAgent(AGENT))`, producing a `ChatModelProvider`
+backed by `OpenClawAgentProvider` → `DirectCallBridge` → `/hooks/agent` (webhook delivery,
+virtual thread blocking). Example:
+```java
+protected void configureCase(CaseDefinition definition) {
+  definition.getWorkers().addAll(List.of(
+    agentWorker("research", "Perform parallel research...", ResearchResult.class),
+    agentWorker("analyse", "Analyse gathered data...", AnalysisResult.class)
+  ));
+}
+```
 
-Use `Worker.builder().function(lambda)` (resolved to `WorkerFunction.Sync` by the builder)
-only for in-process stub workers. **Never cast a lambda to `(WorkerFunction)` — the cast
-bypasses the builder's `function(Function)` overload which wraps in `WorkerFunction.Sync`.
-The engine's `SyncAgentWorkerFunctionHandler.supports()` requires `WorkerFunction.Sync`
-or `AgentWorkerFunction`; a raw lambda cast to `WorkerFunction` is unrecognised.**
+The `agentWorker(String capabilityName, String systemPrompt, Class<?> responseSchema)` helper
+is defined in `LifeTypedCaseHub` and returns a fully-constructed `Worker` with the capability
+name, system prompt, and response schema already configured.
+
+**Stub worker construction (in-process workers):** Use `Worker.builder().function(lambda)`
+(resolved to `WorkerFunction.Sync` by the builder) only for in-process stub workers.
+**Never cast a lambda to `(WorkerFunction)` — the cast bypasses the builder's `function(Function)`
+overload which wraps in `WorkerFunction.Sync`. The engine's `SyncAgentWorkerFunctionHandler.supports()`
+requires `WorkerFunction.Sync` or `AgentWorkerFunction`; a raw lambda cast to `WorkerFunction` is unrecognised.**
+
+**Capability naming:** use `Worker.capabilityName(String)` to set the capability on a worker.
+Example: `agentWorker("name", AGENT).capabilityName("health-coordination")`. The capability
+name routes the worker to a trust-weighted agent via `TrustRoutingPolicyProvider` and provides
+the target for sentinel provisioning (Layer 7).
 
 **AgentDescriptor is registered on CaseDefinition (not Worker)** per engine#543.
-In `augment()`, after adding workers:
+`LifeTypedCaseHub.augment()` handles descriptor registration automatically after
+`configureCase()` returns. Subclasses should NOT call `setAgentDescriptors()` manually —
+it is already done by the base class:
+
 ```java
-yaml.setAgentDescriptors(Map.of(
-        AGENT.agentId(), descriptorFactory.descriptorFor(AGENT)));
+// In LifeTypedCaseHub:
+@Override
+protected final void augment(CaseDefinition definition) {
+    configureCase(definition);
+    definition.setAgentDescriptors(Map.of(
+            agent.agentId(), descriptorFactory.descriptorFor(agent)));
+}
 ```
+
 `LifeAgentDescriptorFactory` (CDI bean, `app.engine.agent`) owns config→descriptor
 construction. `LifeAgent` enum (`app.engine`) defines the 4 agent identity constants.
 `CaseDefinition.agentDescriptorFor(agentId)` returns `Optional<AgentDescriptor>`.
@@ -65,6 +92,36 @@ structured output at the prompt level.
 server-side (persona-level). CaseHub's system prompt is task-level (what to do, output format).
 They are complementary.
 
+**Template method contract:** `LifeTypedCaseHub` subclasses override `configureCase(CaseDefinition definition)`
+to customize the case definition loaded from YAML. This hook is called once during initialization
+and must be idempotent. Use `definition.getWorkers().addAll()` and other mutation methods within
+this override. Do NOT call `setAgentDescriptors()` — the base class handles descriptor registration
+automatically after `configureCase()` returns. Do NOT cache state or call `getDefinition()` — the
+template method owns the final definition contract.
+
+**Exception case — manual Agent construction:** if a worker requires a `userMessage` parameter
+or other customization not covered by `agentWorker()`, construct the `Agent` manually:
+```java
+protected void configureCase(CaseDefinition definition) {
+  Agent customAgent = Agent.builder()
+    .model(openClawFactory.forAgent(agent()))
+    .systemPrompt("custom prompt...")
+    .userMessage("Custom user message template...")
+    .responseSchema(CustomResponseRecord.class)
+    .build();
+  
+  Worker customWorker = Worker.builder()
+    .name("custom-agent")
+    .capabilityName("custom-capability")
+    .function(new AgentWorkerFunction(customAgent))
+    .build();
+  
+  definition.getWorkers().addAll(List.of(customWorker));
+}
+```
+The factory still owns model creation; manual construction is only needed when
+`agentWorker()` cannot express the required configuration (e.g., `userMessage` parameter).
+
 **Configuration:** standard `casehub-openclaw` config keys (`OpenClawClientConfig`):
 - `casehub.openclaw.gateway.url` — OpenClaw gateway base URL
 - `casehub.openclaw.gateway.bearer-token` — API key
@@ -72,7 +129,7 @@ They are complementary.
 - `casehub.openclaw.agent.default-timeout-seconds` — default 120
 
 **Config changes require restart:** `forAgent()` creates the ChatModel once during
-`augment()` (double-checked lock, once per JVM lifetime).
+`configureCase()` initialization (double-checked lock, once per JVM lifetime).
 
 **CDI exclusions:** `casehub-openclaw-casehub` brings several `@ApplicationScoped` beans
 designed for heartbeat/provisioner mode (life#37). Life excludes them via

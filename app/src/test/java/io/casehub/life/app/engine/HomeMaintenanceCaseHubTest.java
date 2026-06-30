@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.casehub.api.model.HumanTaskTarget;
 import io.casehub.api.model.evaluator.JQExpressionEvaluator;
+import io.casehub.life.api.LifeCaseType;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
@@ -113,5 +114,10 @@ class HomeMaintenanceCaseHubTest {
                 "schedule-inspection-agent", "get-quotes-agent",
                 "issue-commitment-agent", "monitor-job-agent",
                 "record-completion-agent"), names);
+    }
+
+    @Test
+    void lifeCaseType() {
+        assertEquals(LifeCaseType.HOME_MAINTENANCE, caseHub.lifeCaseType());
     }
 }

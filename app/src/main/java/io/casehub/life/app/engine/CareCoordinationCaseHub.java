@@ -15,30 +15,20 @@
  */
 package io.casehub.life.app.engine;
 
-import io.casehub.api.engine.YamlCaseHub;
 import io.casehub.api.model.CaseDefinition;
-import io.casehub.api.model.ai.Agent;
+import io.casehub.life.api.LifeCaseType;
 import io.casehub.life.app.engine.agent.CarePlanResult;
 import io.casehub.life.app.engine.agent.HealthCheckResult;
-import io.casehub.life.app.engine.agent.LifeAgentDescriptorFactory;
-import io.casehub.life.app.engine.agent.LifeOpenClawChatModelFactory;
 import io.casehub.life.app.engine.agent.NeedsAssessmentResult;
-import io.casehub.api.model.AgentWorkerFunction;
-import io.casehub.worker.api.Capability;
-import io.casehub.worker.api.Worker;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
-import java.util.List;
-import java.util.Map;
 
 /**
  * Care coordination case hub — loads the YAML definition and augments it with
  * in-process worker functions.
  *
- * <p>Workers are lambda functions that run on Quartz worker threads. The three humanTask
- * bindings (assign-carer, escalate-concern, care-review) are defined in YAML and handled by
- * {@link io.casehub.workadapter.HumanTaskScheduleHandler} — no Java worker needed.
+ * <p>The three humanTask bindings (assign-carer, escalate-concern, care-review) are
+ * defined in YAML and handled by {@link io.casehub.workadapter.HumanTaskScheduleHandler}
+ * — no Java worker needed.
  *
  * <p>SubCase pattern: the care-episode binding spawns a child case (care-episode) and
  * waits for completion. The child's final context is merged back as {@code episodeResult}.
@@ -49,112 +39,27 @@ import java.util.Map;
  * an active appointment-cycle case via CaseHubRuntime.signal(). Refs casehub-life#6.
  */
 @ApplicationScoped
-public class CareCoordinationCaseHub extends YamlCaseHub {
-
-    private static final LifeAgent AGENT = LifeAgent.HEALTH;
-
-    @Inject
-    LifeOpenClawChatModelFactory openClawFactory;
-
-    @Inject
-    LifeAgentDescriptorFactory descriptorFactory;
-
-    private volatile CaseDefinition augmentedDefinition;
+public class CareCoordinationCaseHub extends LifeTypedCaseHub {
 
     public CareCoordinationCaseHub() {
-        super("life/care-coordination.yaml");
+        super("life/care-coordination.yaml", LifeAgent.HEALTH);
     }
 
     @Override
-    public CaseDefinition getDefinition() {
-        if (augmentedDefinition == null) {
-            synchronized (this) {
-                if (augmentedDefinition == null) {
-                    augmentedDefinition = augment(super.getDefinition());
-                }
-            }
-        }
-        return augmentedDefinition;
+    public LifeCaseType lifeCaseType() {
+        return LifeCaseType.CARE_COORDINATION;
     }
 
-    private CaseDefinition augment(CaseDefinition yaml) {
-        yaml.getWorkers().addAll(List.of(
-                needsAssessmentWorker(),
-                carePlanWorker(),
-                healthCheckWorker()
-        ));
-        yaml.setAgentDescriptors(Map.of(
-                AGENT.agentId(), descriptorFactory.descriptorFor(AGENT)));
-        return yaml;
-    }
-
-    private static Capability cap(String name) {
-        return Capability.builder().name(name).inputSchema(".").outputSchema(".").build();
-    }
-
-    /**
-     * Assesses care needs based on the care request.
-     *
-     * <p>Uses OpenClaw's LLM API to assess patient care needs, determining
-     * care level, recommended frequency, and any special requirements.
-     */
-    private Worker needsAssessmentWorker() {
-        final Agent agent = Agent.builder()
-                .model(openClawFactory.forAgent(AGENT))
-                .systemPrompt("""
-                        You are a care coordination agent. Assess care needs for the patient,
-                        determining care level, recommended frequency, and any special requirements.""")
-                .responseSchema(NeedsAssessmentResult.class)
-                .build();
-
-        return Worker.builder()
-                .name("needs-assessment-agent")
-                .capabilities(List.of(cap("needs-assessment")))
-                .function(new AgentWorkerFunction(agent))
-                .build();
-    }
-
-    /**
-     * Creates a care plan with schedule and task list.
-     *
-     * <p>Uses OpenClaw's LLM API to create a care plan with schedule, duration,
-     * and task list based on the needs assessment.
-     */
-    private Worker carePlanWorker() {
-        final Agent agent = Agent.builder()
-                .model(openClawFactory.forAgent(AGENT))
-                .systemPrompt("""
-                        You are a care coordination agent. Create a care plan with schedule,
-                        duration, and task list based on the needs assessment.""")
-                .responseSchema(CarePlanResult.class)
-                .build();
-
-        return Worker.builder()
-                .name("care-plan-agent")
-                .capabilities(List.of(cap("care-plan")))
-                .function(new AgentWorkerFunction(agent))
-                .build();
-    }
-
-    /**
-     * Performs periodic health check and flags concerns.
-     *
-     * <p>Uses OpenClaw's LLM API to perform a periodic health check, reviewing
-     * the patient's condition and flagging any concerns for escalation.
-     */
-    private Worker healthCheckWorker() {
-        final Agent agent = Agent.builder()
-                .model(openClawFactory.forAgent(AGENT))
-                .systemPrompt("""
-                        You are a care coordination agent. Perform a periodic health check,
-                        reviewing the patient's condition and flagging any concerns.""")
-                .responseSchema(HealthCheckResult.class)
-                .build();
-
-        return Worker.builder()
-                .name("health-check-agent")
-                .capabilities(List.of(cap("health-check")))
-                .function(new AgentWorkerFunction(agent))
-                .build();
+    @Override
+    protected void configureCase(CaseDefinition definition) {
+        definition.getWorkers().add(agentWorker("needs-assessment", """
+                You are a care coordination agent. Assess care needs for the patient,
+                determining care level, recommended frequency, and any special requirements.""", NeedsAssessmentResult.class));
+        definition.getWorkers().add(agentWorker("care-plan", """
+                You are a care coordination agent. Create a care plan with schedule,
+                duration, and task list based on the needs assessment.""", CarePlanResult.class));
+        definition.getWorkers().add(agentWorker("health-check", """
+                You are a care coordination agent. Perform a periodic health check,
+                reviewing the patient's condition and flagging any concerns.""", HealthCheckResult.class));
     }
 }

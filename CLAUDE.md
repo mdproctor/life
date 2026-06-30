@@ -237,9 +237,9 @@ Read these **before designing**, not after. The concern column tells you when ea
 | Testing `ActionRiskClassifier` | Unit tests: mock `PreferenceProvider`, use `lenient().when(...)` in `@BeforeEach` for shared stubs — NEVER/unknown types skip `resolve()` entirely, triggering `UnnecessaryStubbingException` in strict mode. `@QuarkusTest`: inject `@RiskClassifier Instance<ActionRiskClassifier>` to verify CDI qualifier wiring. See `LifeActionRiskClassifierTest`, `LifeActionRiskClassifierQuarkusTest`. |
 | Testing `HumanTaskTarget.candidateGroups()` | Returns sealed `ListEvaluator`. Pattern: `ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("group-name")`. Import `io.casehub.api.model.evaluator.ListEvaluator`. |
 | Engine CDI wiring | `quarkus.arc.selected-alternatives` must include `MemorySubCaseGroupRepository`, `MemoryPlanItemStore`, `MemoryReactivePlanItemStore` from casehub-engine-persistence-memory (GE-20260531-1e51d4). |
-| Testing LLM-backed workers (all 7 YamlCaseHubs) | Use `@Alternative @Priority(10) @ApplicationScoped` test CDI bean `TestLifeOpenClawChatModelFactory` registered in `quarkus.arc.selected-alternatives` in test config. **Never use `@InjectMock`** for beans used in `augment()` — Mockito's CDI proxy reset between test classes triggers a Quarkus restart, re-registering Vert.x codecs and failing ALL subsequent `@QuarkusTest` classes. The test factory matches on system prompt key phrases (not user message text) to serve correct canned responses for all 32 workers. **Canned response values must match old stub behavioral intent** — e.g. `requiresApproval: true` when the old stub computed `totalCost > 2000`. See `TestLifeOpenClawChatModelFactory`, GE-20260626-0e976f. |
+| Testing LLM-backed workers (6 LifeTypedCaseHubs + CareEpisodeCaseHub) | Use `@Alternative @Priority(10) @ApplicationScoped` test CDI bean `TestLifeOpenClawChatModelFactory` registered in `quarkus.arc.selected-alternatives` in test config. **Never use `@InjectMock`** for beans used in `configureCase()` or `augment()` — Mockito's CDI proxy reset between test classes triggers a Quarkus restart, re-registering Vert.x codecs and failing ALL subsequent `@QuarkusTest` classes. The test factory matches on system prompt key phrases (not user message text) to serve correct canned responses for all 32 workers. **Canned response values must match old stub behavioral intent** — e.g. `requiresApproval: true` when the old stub computed `totalCost > 2000`. See `TestLifeOpenClawChatModelFactory`, GE-20260626-0e976f. |
 | Engine-ledger PU packages | `io.casehub.ledger.model` must be in the qhorus PU packages — this is `casehub-engine-ledger`'s entity package (e.g. `WorkerDecisionEntry`, `CaseLedgerEntry`), distinct from `io.casehub.ledger.runtime` (casehub-ledger base). Without it: `Unknown entity type 'WorkerDecisionEntry' does not belong to this persistence unit`. |
-| SubCase M-of-N in YAML | M-of-N fields (groupId, totalInGroup, requiredCount) are DSL-only — not YAML-supported. Add via Java augmentation in YamlCaseHub.getDefinition() (GE-20260531-d896bf). |
+| SubCase M-of-N in YAML | M-of-N fields (groupId, totalInGroup, requiredCount) are DSL-only — not YAML-supported. Add via Java augmentation in `configureCase()` (LifeTypedCaseHub subclasses) or `augment()` (YamlCaseHub subclasses). `getDefinition()` is final — never override it (GE-20260531-d896bf). |
 
 ---
 
@@ -274,7 +274,7 @@ Note: `HouseholdTask`, `LifeGoal`, `LifeEvent` were removed in Layer 2 — they 
 - `LifeCaseService` — three-phase case start (PP-20260529-3ffe28). Direct injection of each YamlCaseHub, switch on LifeCaseType.
 - `LifeCaseTrackerObserver` — `@ObservesAsync CaseLifecycleEvent` updates tracker status.
 - `LifeDecisionLedgerObserver` — refactored: domain resolution now uses `WorkItem.scope` Path (primary), LifeTaskContext (fallback).
-- 8 `YamlCaseHub` subclasses + 8 fluent DSL companions in `io.casehub.life.app.engine`. Workers use quarkus-flow FuncDSL per PP-20260531-worker-func-exec.
+- `LifeTypedCaseHub` — abstract base in `io.casehub.life.app.engine` extending `YamlCaseHub`; template method `augment()` (final) calls `configureCase()` (abstract) then registers agent descriptors. `agentWorker(capabilityName, systemPrompt, responseSchema)` helper builds Agent→Worker→AgentWorkerFunction. `lifeCaseType()` abstract method carries case-type identity. 6 subclasses extend it; CareEpisodeCaseHub extends YamlCaseHub directly (sub-case only, no LifeCaseType); FamilyVoteCaseHub extends YamlCaseHub (no augmentation). 8 YAML case definitions at `app/src/main/resources/life/`.
 - 8 YAML case definitions at `app/src/main/resources/life/`.
 - `POST /life-cases` endpoint — `LifeCaseResource`.
 - Scope retrofit: WorkItem scope changed from `"life"` to `"casehubio/life/{domain}"` (hierarchical Path format).
@@ -295,7 +295,7 @@ Note: `HouseholdTask`, `LifeGoal`, `LifeEvent` were removed in Layer 2 — they 
   creates a per-agent `ChatModelProvider` backed by `OpenClawAgentProvider` → `DirectCallBridge` →
   `/hooks/agent` (webhook delivery). Config: standard `casehub.openclaw.*` keys from
   `OpenClawClientConfig` (`casehub-openclaw-core`). Each `forAgent()` call creates a `ChatModel` once
-  during `augment()` (double-checked lock, once per JVM lifetime). Config changes require restart.
+  during `configureCase()` (caching handled by `YamlCaseHub.getDefinition()`, once per JVM lifetime). Config changes require restart.
 - `LifeAgent` — `app/engine/` enum: 4 agent identity constants (HEALTH, HOME, FINANCE, TRAVEL).
   `agentId()` derives `{MODEL_FAMILY}:{persona}@{MAJOR_VERSION}`. `persona()` returns the bare
   persona for `LifeOpenClawChatModelFactory`. Separate from `LifeDomain` — mapping is not 1:1.
@@ -414,7 +414,7 @@ app/    — Quarkus: JPA entities (ExternalActor, LifeTaskContext, LifeCommitmen
           service layer, SPI implementations (LifeSlaBreachPolicy, LifeCommitmentStrategy + 3 impls),
           infrastructure (LifeChannelInitializer), observers (LifeOversightResponseObserver,
           LifeWatchdogAlertObserver, LifeDecisionLedgerObserver, LifeCaseTrackerObserver),
-          engine (io.casehub.life.app.engine — 8 YamlCaseHub subclasses + 8 DSL companions +
+          engine (io.casehub.life.app.engine — LifeTypedCaseHub abstract base + 6 subclasses + CareEpisodeCaseHub (YamlCaseHub) + FamilyVoteCaseHub (YamlCaseHub) +
           LifeCaseService + LifeCaseTrackerObserver),
           routing (io.casehub.life.app.routing — LifeTrustRoutingPolicyProvider +
           LifeTrustRoutingPolicyKeys + LifeRoutingPolicy + DoublePreference),

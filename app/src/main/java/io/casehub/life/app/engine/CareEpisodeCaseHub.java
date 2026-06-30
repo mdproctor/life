@@ -23,7 +23,6 @@ import io.casehub.life.app.engine.agent.LifeAgentDescriptorFactory;
 import io.casehub.life.app.engine.agent.LifeOpenClawChatModelFactory;
 import io.casehub.life.app.engine.agent.ProvideCareResult;
 import io.casehub.api.model.AgentWorkerFunction;
-import io.casehub.worker.api.Capability;
 import io.casehub.worker.api.Worker;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -54,36 +53,18 @@ public class CareEpisodeCaseHub extends YamlCaseHub {
     @Inject
     LifeAgentDescriptorFactory descriptorFactory;
 
-    private volatile CaseDefinition augmentedDefinition;
-
     public CareEpisodeCaseHub() {
         super("life/care-episode.yaml");
     }
 
     @Override
-    public CaseDefinition getDefinition() {
-        if (augmentedDefinition == null) {
-            synchronized (this) {
-                if (augmentedDefinition == null) {
-                    augmentedDefinition = augment(super.getDefinition());
-                }
-            }
-        }
-        return augmentedDefinition;
-    }
-
-    private CaseDefinition augment(CaseDefinition yaml) {
-        yaml.getWorkers().addAll(List.of(
+    protected void augment(CaseDefinition definition) {
+        definition.getWorkers().addAll(List.of(
                 assessPatientWorker(),
                 provideCareWorker()
         ));
-        yaml.setAgentDescriptors(Map.of(
+        definition.setAgentDescriptors(Map.of(
                 AGENT.agentId(), descriptorFactory.descriptorFor(AGENT)));
-        return yaml;
-    }
-
-    private static Capability cap(String name) {
-        return Capability.builder().name(name).inputSchema(".").outputSchema(".").build();
     }
 
     /**
@@ -103,7 +84,7 @@ public class CareEpisodeCaseHub extends YamlCaseHub {
 
         return Worker.builder()
                 .name("assess-patient-agent")
-                .capabilities(List.of(cap("assess-patient")))
+                .capabilityName("assess-patient")
                 .function(new AgentWorkerFunction(agent))
                 .build();
     }
@@ -125,7 +106,7 @@ public class CareEpisodeCaseHub extends YamlCaseHub {
 
         return Worker.builder()
                 .name("provide-care-agent")
-                .capabilities(List.of(cap("provide-care")))
+                .capabilityName("provide-care")
                 .function(new AgentWorkerFunction(agent))
                 .build();
     }

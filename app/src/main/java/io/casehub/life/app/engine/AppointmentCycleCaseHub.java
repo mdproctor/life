@@ -15,24 +15,17 @@
  */
 package io.casehub.life.app.engine;
 
-import io.casehub.api.engine.YamlCaseHub;
 import io.casehub.api.model.CaseDefinition;
 import io.casehub.api.model.ai.Agent;
+import io.casehub.life.api.LifeCaseType;
 import io.casehub.life.app.engine.agent.BookingResult;
 import io.casehub.life.app.engine.agent.ConfirmAppointmentResult;
 import io.casehub.life.app.engine.agent.FindAlternativeResult;
-import io.casehub.life.app.engine.agent.LifeAgentDescriptorFactory;
-import io.casehub.life.app.engine.agent.LifeOpenClawChatModelFactory;
 import io.casehub.life.app.engine.agent.PreVisitPrepResult;
 import io.casehub.life.app.engine.agent.RecordHealthDecisionResult;
 import io.casehub.api.model.AgentWorkerFunction;
-import io.casehub.worker.api.Capability;
 import io.casehub.worker.api.Worker;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
-import java.util.List;
-import java.util.Map;
 
 /**
  * Appointment cycle case hub — loads the YAML definition and augments it with workers.
@@ -42,59 +35,37 @@ import java.util.Map;
  * LLM backend. Agent identity follows the {model-family}:{persona}@{major} convention
  * from docs/specs/life-actor-model.md. Refs engine#463 (settled function-as-worker design).
  *
- * <p>All other workers remain stubs (WorkerFunction.Sync lambdas) until full Layer 7 lands.
- *
  * <p>The humanTask binding (attend-and-record) is defined in YAML and handled by
  * {@link io.casehub.workadapter.HumanTaskScheduleHandler} — no Java worker needed.
- *
- * <p>augmentedDefinition is baked exactly once per JVM lifetime (double-checked lock).
- * chatModelProvider.get() is called once during Agent.build() in augment(). Config changes
- * to casehub.life.openclaw.* require a restart.
  */
 @ApplicationScoped
-public class AppointmentCycleCaseHub extends YamlCaseHub {
-
-    private static final LifeAgent AGENT = LifeAgent.HEALTH;
-
-    @Inject
-    LifeOpenClawChatModelFactory openClawFactory;
-
-    @Inject
-    LifeAgentDescriptorFactory descriptorFactory;
-
-    private volatile CaseDefinition augmentedDefinition;
+public class AppointmentCycleCaseHub extends LifeTypedCaseHub {
 
     public AppointmentCycleCaseHub() {
-        super("life/appointment-cycle.yaml");
+        super("life/appointment-cycle.yaml", LifeAgent.HEALTH);
     }
 
     @Override
-    public CaseDefinition getDefinition() {
-        if (augmentedDefinition == null) {
-            synchronized (this) {
-                if (augmentedDefinition == null) {
-                    augmentedDefinition = augment(super.getDefinition());
-                }
-            }
-        }
-        return augmentedDefinition;
+    public LifeCaseType lifeCaseType() {
+        return LifeCaseType.APPOINTMENT_CYCLE;
     }
 
-    private CaseDefinition augment(final CaseDefinition yaml) {
-        yaml.getWorkers().addAll(List.of(
-                bookAppointmentWorker(),
-                findAlternativeWorker(),
-                confirmAppointmentWorker(),
-                preVisitPrepWorker(),
-                recordHealthDecisionWorker()
-        ));
-        yaml.setAgentDescriptors(Map.of(
-                AGENT.agentId(), descriptorFactory.descriptorFor(AGENT)));
-        return yaml;
-    }
-
-    private static Capability cap(final String name) {
-        return Capability.builder().name(name).inputSchema(".").outputSchema(".").build();
+    @Override
+    protected void configureCase(CaseDefinition definition) {
+        definition.getWorkers().add(bookAppointmentWorker());
+        definition.getWorkers().add(agentWorker("find-alternative", """
+                You are a healthcare appointment agent. Find an alternative provider
+                after a booking was declined. Search available providers and propose
+                an alternative appointment.""", FindAlternativeResult.class));
+        definition.getWorkers().add(agentWorker("confirm-appointment", """
+                You are a healthcare appointment agent. Send appointment confirmation
+                to the patient and schedule a reminder for 24 hours before.""", ConfirmAppointmentResult.class));
+        definition.getWorkers().add(agentWorker("pre-visit-prep", """
+                You are a healthcare appointment agent. Send pre-visit preparation
+                checklist and instructions to the patient.""", PreVisitPrepResult.class));
+        definition.getWorkers().add(agentWorker("record-health-decision", """
+                You are a healthcare records agent. Record health decision outcomes
+                to the tamper-evident ledger.""", RecordHealthDecisionResult.class));
     }
 
     /**
@@ -111,7 +82,7 @@ public class AppointmentCycleCaseHub extends YamlCaseHub {
      */
     private Worker bookAppointmentWorker() {
         final Agent bookingAgent = Agent.builder()
-                .model(openClawFactory.forAgent(AGENT))
+                .model(openClawFactory.forAgent(agent()))
                 .systemPrompt("""
                         You are a healthcare appointment booking agent for a UK household.
                         Book medical appointments with the requested provider.
@@ -124,97 +95,8 @@ public class AppointmentCycleCaseHub extends YamlCaseHub {
 
         return Worker.builder()
                 .name("book-appointment-agent")
-                .capabilities(List.of(cap("book-appointment")))
+                .capabilityName("book-appointment")
                 .function(new AgentWorkerFunction(bookingAgent))
-                .build();
-    }
-
-    /**
-     * Finds an alternative provider after a booking was declined.
-     *
-     * <p>Uses OpenClaw's LLM API to search for alternative providers and propose
-     * an alternative appointment. Part of the appointment-cycle adaptive path.
-     */
-    private Worker findAlternativeWorker() {
-        final Agent agent = Agent.builder()
-                .model(openClawFactory.forAgent(AGENT))
-                .systemPrompt("""
-                        You are a healthcare appointment agent. Find an alternative provider
-                        after a booking was declined. Search available providers and propose
-                        an alternative appointment.""")
-                .responseSchema(FindAlternativeResult.class)
-                .build();
-
-        return Worker.builder()
-                .name("find-alternative-agent")
-                .capabilities(List.of(cap("find-alternative")))
-                .function(new AgentWorkerFunction(agent))
-                .build();
-    }
-
-    /**
-     * Sends appointment confirmation and schedules a reminder.
-     *
-     * <p>Uses OpenClaw's LLM API to send confirmation to the patient and schedule
-     * a reminder for 24 hours before the appointment.
-     */
-    private Worker confirmAppointmentWorker() {
-        final Agent agent = Agent.builder()
-                .model(openClawFactory.forAgent(AGENT))
-                .systemPrompt("""
-                        You are a healthcare appointment agent. Send appointment confirmation
-                        to the patient and schedule a reminder for 24 hours before.""")
-                .responseSchema(ConfirmAppointmentResult.class)
-                .build();
-
-        return Worker.builder()
-                .name("confirm-appointment-agent")
-                .capabilities(List.of(cap("confirm-appointment")))
-                .function(new AgentWorkerFunction(agent))
-                .build();
-    }
-
-    /**
-     * Sends pre-visit preparation checklist and instructions.
-     *
-     * <p>Uses OpenClaw's LLM API to send a pre-visit checklist and preparation
-     * instructions to the patient.
-     */
-    private Worker preVisitPrepWorker() {
-        final Agent agent = Agent.builder()
-                .model(openClawFactory.forAgent(AGENT))
-                .systemPrompt("""
-                        You are a healthcare appointment agent. Send pre-visit preparation
-                        checklist and instructions to the patient.""")
-                .responseSchema(PreVisitPrepResult.class)
-                .build();
-
-        return Worker.builder()
-                .name("pre-visit-prep-agent")
-                .capabilities(List.of(cap("pre-visit-prep")))
-                .function(new AgentWorkerFunction(agent))
-                .build();
-    }
-
-    /**
-     * Records health decision outcome to the tamper-evident ledger.
-     *
-     * <p>Uses OpenClaw's LLM API to record health decision outcomes to the
-     * tamper-evident ledger for compliance tracking.
-     */
-    private Worker recordHealthDecisionWorker() {
-        final Agent agent = Agent.builder()
-                .model(openClawFactory.forAgent(AGENT))
-                .systemPrompt("""
-                        You are a healthcare records agent. Record health decision outcomes
-                        to the tamper-evident ledger.""")
-                .responseSchema(RecordHealthDecisionResult.class)
-                .build();
-
-        return Worker.builder()
-                .name("record-health-decision-agent")
-                .capabilities(List.of(cap("record-health-decision")))
-                .function(new AgentWorkerFunction(agent))
                 .build();
     }
 }

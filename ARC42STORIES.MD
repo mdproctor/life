@@ -190,7 +190,7 @@ C4Container
   }
 
   Container_Boundary(b5, "Layer: casehub-engine (L5)") {
-    Container(casehubs, "TravelPlanCaseHub · HomeMaintenanceCaseHub · (6 more)", "YamlCaseHub (app/engine/)", "8 YAML + DSL paired case definitions; FuncDSL workers")
+    Container(casehubs, "TravelPlanCaseHub · HomeMaintenanceCaseHub · (6 more)", "LifeTypedCaseHub (app/engine/)", "8 YAML + DSL paired case definitions; FuncDSL workers; configureCase() augmentation hook")
     Container(caseservice, "LifeCaseService", "Quarkus CDI (app/engine/)", "Three-phase case start: validate → join() outside TX → persist engineCaseId")
     Container(casetracker, "LifeCaseTracker · LifeCaseTrackerObserver", "JPA + CDI (app/)", "Tracks active cases by type; enables cross-case signal lookup")
   }
@@ -1003,11 +1003,11 @@ Integration tests re-enabled (engine#410 resolved — commit 66a6e34, life#23). 
 
 #### Pattern introduced
 
-**YAML + DSL paired case definition with FuncDSL workers:** each case has a YAML definition (structure) and a DSL companion (tests + augmentation). Workers use `FuncWorkflowBuilder` per PP-20260531.
+**YAML + DSL paired case definition with LifeTypedCaseHub extension:** each case has a YAML definition (structure) and a DSL companion class extending `LifeTypedCaseHub` with `configureCase()` override. The `configureCase()` template method hook allows Java code to augment the YAML definition (add workers, set agent descriptors, bind M-of-N logic). Workers use `FuncWorkflowBuilder` per PP-20260531.
 
 #### Pattern anchor
 
-- `TravelPlanCaseHub#getDefinition()` — YAML + DSL augmentation with M-of-N SubCase bindings
+- `TravelPlanCaseHub#configureCase()` — YAML + DSL augmentation via `LifeTypedCaseHub` template method override; M-of-N SubCase bindings added in override
 - `LifeCaseService#startCase()` — three-phase case start pattern
 
 #### Gotchas
@@ -1034,7 +1034,7 @@ Integration tests re-enabled (engine#410 resolved — commit 66a6e34, life#23). 
 3. Add Jandex index entries for all engine modules in test `application.properties`.
 4. Create a `LifeCaseType`-equivalent enum in `api/` listing REST-exposed case types. Sub-case-only types are not LifeCaseTypes.
 5. Create `LifeCaseTracker` JPA entity tracking `{caseType, engineCaseId, status, createdAt, completedAt}`. Migration at V107+.
-6. For each case: YAML at `app/src/main/resources/{app}/`, `@ApplicationScoped` YamlCaseHub subclass with `getDefinition()` override, and companion DSL class with static `build()`.
+6. For each case: YAML at `app/src/main/resources/{app}/`, `@ApplicationScoped` subclass extending `LifeTypedCaseHub` with `configureCase()` override, and companion DSL class with static `build()`. The `configureCase()` hook augments the YAML definition (add workers, set agent descriptors, bind M-of-N logic).
 7. Workers use `FuncWorkflowBuilder.workflow().tasks(FuncDSL.function(...)).build()`. CDI service calls wrapped inside `FuncDSL.function()`.
 8. Create `LifeCaseService` with three-phase pattern (PP-20260529-3ffe28): validate + create tracker → join() outside TX → persist engineCaseId.
 9. Create `LifeCaseTrackerObserver` — `@ObservesAsync CaseLifecycleEvent("CaseCompleted")` updates tracker. Pure infrastructure.
@@ -1152,6 +1152,7 @@ Decisions that span multiple layers or are cross-cutting. Layer-specific decisio
 | **Scope Path** | Hierarchical WorkItem scope format: `casehubio/life/{domain}` — used for domain resolution |
 | **FuncDSL** | quarkus-flow DSL for worker function pipelines: `FuncWorkflowBuilder.workflow().tasks(FuncDSL.function(...)).build()` |
 | **YamlCaseHub** | Engine base class that loads a YAML case definition and optionally augments it with Java code |
+| **LifeTypedCaseHub** | casehub-life's typed extension of YamlCaseHub that provides the `configureCase()` template method hook and `agentWorker()` helper for building LLM-backed workers |
 | **M-of-N SubCase** | Quorum pattern: parent spawns N child cases, resumes when M complete. DSL-only — not in YAML schema. |
 
 ---

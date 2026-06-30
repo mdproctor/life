@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.casehub.api.model.HumanTaskTarget;
+import io.casehub.life.api.LifeCaseType;
 import io.casehub.api.model.SubCaseTarget;
 import io.casehub.api.model.evaluator.JQExpressionEvaluator;
 import io.quarkus.test.junit.QuarkusTest;
@@ -166,5 +167,10 @@ class CareCoordinationCaseHubTest {
         assertEquals(Set.of(
                 "needs-assessment-agent", "care-plan-agent",
                 "health-check-agent"), names);
+    }
+
+    @Test
+    void lifeCaseType() {
+        assertEquals(LifeCaseType.CARE_COORDINATION, caseHub.lifeCaseType());
     }
 }

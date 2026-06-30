@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.casehub.api.model.HumanTaskTarget;
 import io.casehub.api.model.evaluator.JQExpressionEvaluator;
 import io.casehub.api.model.evaluator.ListEvaluator;
+import io.casehub.life.api.LifeCaseType;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
@@ -127,5 +128,10 @@ class AppointmentCycleCaseHubTest {
                 .isEqualTo(LifeAgent.HEALTH.agentId());
         assertThat(descriptor.provider()).isEqualTo(LifeAgent.MODEL_FAMILY);
         assertThat(descriptor.slot()).isEqualTo(LifeAgent.HEALTH.slot());
+    }
+
+    @Test
+    void lifeCaseType() {
+        assertEquals(LifeCaseType.APPOINTMENT_CYCLE, caseHub.lifeCaseType());
     }
 }

@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.casehub.api.model.HumanTaskTarget;
 import io.casehub.api.model.evaluator.JQExpressionEvaluator;
+import io.casehub.life.api.LifeCaseType;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
@@ -136,5 +137,10 @@ class ContractorCoordinationCaseHubTest {
                         && jq.expression().contains("channelMessage")
                         && jq.expression().contains("RESPONSE"),
                 "quote-received binding should check .channelMessage.messageType == RESPONSE");
+    }
+
+    @Test
+    void lifeCaseType() {
+        assertEquals(LifeCaseType.CONTRACTOR_COORDINATION, caseHub.lifeCaseType());
     }
 }
