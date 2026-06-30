@@ -27,7 +27,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
-import io.casehub.api.model.evaluator.ListEvaluator;
+import io.casehub.api.spi.routing.CandidateSetSpec;
+import io.casehub.api.spi.routing.StaticSetStrategy;
 
 /**
  * Definition test for the care-episode CaseHub (child case).
@@ -78,7 +79,7 @@ class CareEpisodeCaseHubTest {
                 .orElseThrow();
         assertTrue(binding.target() instanceof HumanTaskTarget ht
                 && "Record care visit notes".equals(ht.title())
-                && ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("household-member")
+                && ht.candidateGroups() instanceof CandidateSetSpec.Inline inline && inline.strategy() instanceof StaticSetStrategy ss && ss.values().contains("household-member")
                 && "casehubio/life/elder-care".equals(ht.scope()));
     }
 

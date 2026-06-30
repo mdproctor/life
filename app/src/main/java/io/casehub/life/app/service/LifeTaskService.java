@@ -94,6 +94,7 @@ public class LifeTaskService {
         ctx.workItemId = workItem.id;
         ctx.domain = domain;
         ctx.externalActorId = req.externalActorId();
+        ctx.jurisdiction = req.jurisdiction();
         ctx.persist();
 
         ledgerHandlers.stream()

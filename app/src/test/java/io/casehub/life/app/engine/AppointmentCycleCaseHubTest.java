@@ -22,7 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.casehub.api.model.HumanTaskTarget;
 import io.casehub.api.model.evaluator.JQExpressionEvaluator;
-import io.casehub.api.model.evaluator.ListEvaluator;
+import io.casehub.api.spi.routing.CandidateSetSpec;
+import io.casehub.api.spi.routing.StaticSetStrategy;
 import io.casehub.life.api.LifeCaseType;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -85,7 +86,7 @@ class AppointmentCycleCaseHubTest {
                 .orElseThrow();
         assertTrue(binding.target() instanceof HumanTaskTarget ht
                 && "Record post-visit notes".equals(ht.title())
-                && ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("household-member")
+                && ht.candidateGroups() instanceof CandidateSetSpec.Inline inline && inline.strategy() instanceof StaticSetStrategy ss && ss.values().contains("household-member")
                 && "casehubio/life/health".equals(ht.scope()));
     }
 

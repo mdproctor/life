@@ -25,7 +25,8 @@ import io.casehub.api.model.evaluator.JQExpressionEvaluator;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import io.casehub.api.model.evaluator.ListEvaluator;
+import io.casehub.api.spi.routing.CandidateSetSpec;
+import io.casehub.api.spi.routing.StaticSetStrategy;
 
 /**
  * DSL test for the contractor-coordination case definition.
@@ -75,7 +76,7 @@ class ContractorCoordinationCaseDefinitionsTest {
                 .orElseThrow();
         assertTrue(binding.target() instanceof HumanTaskTarget ht
                 && "Approve contractor quote".equals(ht.title())
-                && ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("household-admin")
+                && ht.candidateGroups() instanceof CandidateSetSpec.Inline inline && inline.strategy() instanceof StaticSetStrategy ss && ss.values().contains("household-admin")
                 && "casehubio/life/household".equals(ht.scope()));
     }
 
@@ -87,7 +88,7 @@ class ContractorCoordinationCaseDefinitionsTest {
                 .orElseThrow();
         assertTrue(binding.target() instanceof HumanTaskTarget ht
                 && "Confirm contractor payment".equals(ht.title())
-                && ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("household-admin")
+                && ht.candidateGroups() instanceof CandidateSetSpec.Inline inline && inline.strategy() instanceof StaticSetStrategy ss && ss.values().contains("household-admin")
                 && "casehubio/life/finance".equals(ht.scope()));
     }
 

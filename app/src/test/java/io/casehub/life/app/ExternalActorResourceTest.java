@@ -1,15 +1,10 @@
 package io.casehub.life.app;
 
-import io.casehub.work.api.WorkItemPriority;
-import io.casehub.work.runtime.model.WorkItemTemplate;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.security.TestSecurity;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
-import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
@@ -30,18 +25,7 @@ class ExternalActorResourceTest {
     @BeforeEach
     @Transactional
     void seedTemplate() {
-        if (WorkItemTemplate.find("name", "household-task").count() == 0) {
-            WorkItemTemplate t = new WorkItemTemplate();
-            t.id = UUID.fromString("00000000-0000-0000-0000-000000000001");
-            t.name = "household-task";
-            t.category = "household";
-            t.priority = WorkItemPriority.MEDIUM;
-            t.candidateGroups = "household-member";
-            t.defaultExpiryHours = 24;
-            t.createdBy = "life-system";
-            t.createdAt = Instant.now();
-            t.persist();
-        }
+        LifeTestFixtures.seedStandardTemplates();
     }
 
     @Test

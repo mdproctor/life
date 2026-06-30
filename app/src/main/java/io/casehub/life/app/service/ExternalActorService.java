@@ -130,7 +130,7 @@ public class ExternalActorService {
     public List<LifeTaskContextResponse> listTasks(final UUID actorId) {
         return LifeTaskContext.<LifeTaskContext>list("externalActorId", actorId)
                 .stream()
-                .map(c -> new LifeTaskContextResponse(c.workItemId, c.domain, c.externalActorId, c.recurrence))
+                .map(c -> new LifeTaskContextResponse(c.workItemId, c.domain, c.externalActorId, c.recurrence, c.jurisdiction))
                 .toList();
     }
 

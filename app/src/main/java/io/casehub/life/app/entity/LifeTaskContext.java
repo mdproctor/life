@@ -28,4 +28,7 @@ public class LifeTaskContext extends PanacheEntityBase {
 
     @Column(length = 100)
     public String recurrence;
+
+    @Column(length = 10)
+    public String jurisdiction;
 }

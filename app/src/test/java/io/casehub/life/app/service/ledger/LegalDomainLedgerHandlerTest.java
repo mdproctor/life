@@ -109,4 +109,60 @@ class LegalDomainLedgerHandlerTest {
         LegalActionLedgerEntry entry = (LegalActionLedgerEntry) captor.getValue();
         assertEquals("GB", entry.jurisdiction); // Expected to match config default
     }
+
+    @Test void writeEntry_usesContextJurisdiction_whenPresent() {
+        UUID taskId = UUID.randomUUID();
+        WorkItem workItem = new WorkItem();
+        workItem.id = taskId;
+        workItem.title = "File immigration paperwork";
+
+        LifeTaskContext ctx = new LifeTaskContext();
+        ctx.workItemId = taskId;
+        ctx.domain = LifeDomain.LEGAL;
+        ctx.jurisdiction = "US-CA";
+
+        handler = new LegalDomainLedgerHandler(ledgerRepository, attestationWriter) {
+            @Override protected Optional<LifeTaskContext> findContext(UUID id) {
+                return Optional.of(ctx);
+            }
+        };
+
+        when(ledgerRepository.findLatestBySubjectId(any(), any())).thenReturn(Optional.empty());
+        when(ledgerRepository.save(any(), any())).thenAnswer(i -> i.getArgument(0));
+
+        handler.writeEntry(LifeDecisionEventType.COMPLETED, taskId, workItem);
+
+        ArgumentCaptor<LedgerEntry> captor = ArgumentCaptor.forClass(LedgerEntry.class);
+        verify(ledgerRepository).save(captor.capture(), any());
+        LegalActionLedgerEntry entry = (LegalActionLedgerEntry) captor.getValue();
+        assertEquals("US-CA", entry.jurisdiction);
+    }
+
+    @Test void writeEntry_fallsBackToConfig_whenContextJurisdictionNull() {
+        UUID taskId = UUID.randomUUID();
+        WorkItem workItem = new WorkItem();
+        workItem.id = taskId;
+        workItem.title = "File tax return";
+
+        LifeTaskContext ctx = new LifeTaskContext();
+        ctx.workItemId = taskId;
+        ctx.domain = LifeDomain.LEGAL;
+        ctx.jurisdiction = null;
+
+        handler = new LegalDomainLedgerHandler(ledgerRepository, attestationWriter) {
+            @Override protected Optional<LifeTaskContext> findContext(UUID id) {
+                return Optional.of(ctx);
+            }
+        };
+
+        when(ledgerRepository.findLatestBySubjectId(any(), any())).thenReturn(Optional.empty());
+        when(ledgerRepository.save(any(), any())).thenAnswer(i -> i.getArgument(0));
+
+        handler.writeEntry(LifeDecisionEventType.COMPLETED, taskId, workItem);
+
+        ArgumentCaptor<LedgerEntry> captor = ArgumentCaptor.forClass(LedgerEntry.class);
+        verify(ledgerRepository).save(captor.capture(), any());
+        LegalActionLedgerEntry entry = (LegalActionLedgerEntry) captor.getValue();
+        assertEquals("GB", entry.jurisdiction);
+    }
 }

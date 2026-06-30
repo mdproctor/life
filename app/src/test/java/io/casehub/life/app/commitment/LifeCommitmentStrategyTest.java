@@ -41,7 +41,7 @@ class LifeCommitmentStrategyTest {
     void oversightContext_onlyOversightApplies() {
         final var ctx = new OversightContext(
                 new OversightGateRequest(LifeDomain.FINANCE, Instant.now().plusSeconds(3600),
-                        new CreateLifeTaskRequest("household-task", "Buy groceries", null, null), null, null));
+                        new CreateLifeTaskRequest("household-task", "Buy groceries", null, null, null), null, null));
         assertThat(delegation.applies(ctx)).isFalse();
         assertThat(contractor.applies(ctx)).isFalse();
         assertThat(oversight.applies(ctx)).isTrue();
@@ -84,7 +84,7 @@ class LifeCommitmentStrategyTest {
         // Oversight
         final var oversightCtx = new OversightContext(
                 new OversightGateRequest(LifeDomain.FINANCE, Instant.now().plusSeconds(3600),
-                        new CreateLifeTaskRequest("household-task", "Title", null, null), null, null));
+                        new CreateLifeTaskRequest("household-task", "Title", null, null, null), null, null));
 
         // Each strategy applies to exactly one context type
         assertThat(delegation.applies(delegCtx) ? 1 : 0)

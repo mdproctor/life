@@ -18,6 +18,12 @@
     constants, task/goal status enums.</description>
 
   <dependencies>
+    <!-- Engine API — CandidateSetStrategy, StaticSetStrategy for HouseholdActionType -->
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-engine-api</artifactId>
+    </dependency>
+
     <!-- Validation API for request records -->
     <dependency>
       <groupId>jakarta.validation</groupId>

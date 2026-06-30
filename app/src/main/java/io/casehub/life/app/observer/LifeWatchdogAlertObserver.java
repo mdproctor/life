@@ -78,7 +78,7 @@ public class LifeWatchdogAlertObserver {
         }
 
         // "life-escalation" WorkItemTemplate seeded at V104.
-        // CreateLifeTaskRequest(templateRef, title, externalActorId, deadline)
-        lifeTaskService.create(new CreateLifeTaskRequest("life-escalation", title, null, null));
+        // CreateLifeTaskRequest(templateRef, title, externalActorId, deadline, jurisdiction)
+        lifeTaskService.create(new CreateLifeTaskRequest("life-escalation", title, null, null, null));
     }
 }

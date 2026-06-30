@@ -8,5 +8,6 @@ public record LifeTaskContextResponse(
         UUID workItemId,
         LifeDomain domain,
         UUID externalActorId,
-        String recurrence
+        String recurrence,
+        String jurisdiction
 ) {}

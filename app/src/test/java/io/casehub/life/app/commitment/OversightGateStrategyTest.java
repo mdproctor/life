@@ -33,7 +33,7 @@ class OversightGateStrategyTest {
         final OversightGateRequest request = new OversightGateRequest(
                 LifeDomain.FINANCE,
                 Instant.now().plusSeconds(3600),
-                new CreateLifeTaskRequest("household-task", "Buy new car", null, null),
+                new CreateLifeTaskRequest("household-task", "Buy new car", null, null, null),
                 BigDecimal.valueOf(5000),
                 "vehicle"
         );
@@ -52,7 +52,7 @@ class OversightGateStrategyTest {
         final OversightGateRequest request = new OversightGateRequest(
                 LifeDomain.HEALTH,
                 Instant.now().plusSeconds(3600),
-                new CreateLifeTaskRequest("household-task", "Expensive treatment", null, null),
+                new CreateLifeTaskRequest("household-task", "Expensive treatment", null, null, null),
                 BigDecimal.valueOf(2000),
                 "medical"
         );
@@ -71,7 +71,7 @@ class OversightGateStrategyTest {
         final OversightGateRequest request = new OversightGateRequest(
                 LifeDomain.FINANCE,
                 Instant.now().plusSeconds(3600),
-                new CreateLifeTaskRequest("household-task", "Buy new motorbike", null, null),
+                new CreateLifeTaskRequest("household-task", "Buy new motorbike", null, null, null),
                 BigDecimal.valueOf(8000),
                 "vehicle"
         );
@@ -91,7 +91,7 @@ class OversightGateStrategyTest {
         final OversightGateRequest request = new OversightGateRequest(
                 LifeDomain.FINANCE,
                 Instant.now().plusSeconds(3600),
-                new CreateLifeTaskRequest("household-task", "Duplicate gate", null, null),
+                new CreateLifeTaskRequest("household-task", "Duplicate gate", null, null, null),
                 BigDecimal.valueOf(1000),
                 "general"
         );

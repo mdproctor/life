@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import io.casehub.api.spi.routing.StaticSetStrategy;
 import java.util.Optional;
 
 import static io.casehub.life.api.HouseholdActionType.*;
@@ -67,12 +68,12 @@ class HouseholdActionTypeTest {
 
     @Test
     void healthMedicationFlag_candidateGroupsIncludesMember() {
-        assertTrue(HEALTH_MEDICATION_FLAG.candidateGroups().contains(HouseholdGroups.MEMBER));
+        assertTrue(((StaticSetStrategy) HEALTH_MEDICATION_FLAG.candidateGroups()).values().contains(HouseholdGroups.MEMBER));
     }
 
     @Test
     void elderCareDecision_candidateGroupsIncludesMember() {
-        assertTrue(ELDER_CARE_DECISION.candidateGroups().contains(HouseholdGroups.MEMBER));
+        assertTrue(((StaticSetStrategy) ELDER_CARE_DECISION.candidateGroups()).values().contains(HouseholdGroups.MEMBER));
     }
 
     @Test

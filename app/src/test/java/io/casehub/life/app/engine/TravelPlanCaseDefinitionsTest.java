@@ -25,7 +25,8 @@ import io.casehub.api.model.HumanTaskTarget;
 import io.casehub.api.model.OnThresholdReached;
 import io.casehub.api.model.SubCaseTarget;
 import org.junit.jupiter.api.Test;
-import io.casehub.api.model.evaluator.ListEvaluator;
+import io.casehub.api.spi.routing.CandidateSetSpec;
+import io.casehub.api.spi.routing.StaticSetStrategy;
 
 /**
  * Verifies the fluent DSL companion produces a valid CaseDefinition with the
@@ -101,7 +102,7 @@ class TravelPlanCaseDefinitionsTest {
                 .orElseThrow();
         assertTrue(binding.target() instanceof HumanTaskTarget ht
                 && "Approve travel booking".equals(ht.title())
-                && ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("household-admin")
+                && ht.candidateGroups() instanceof CandidateSetSpec.Inline inline && inline.strategy() instanceof StaticSetStrategy ss && ss.values().contains("household-admin")
                 && "casehubio/life/finance".equals(ht.scope()));
     }
 

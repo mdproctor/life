@@ -2,6 +2,7 @@ package io.casehub.life.app.routing;
 
 import io.casehub.api.spi.RiskDecision.Autonomous;
 import io.casehub.api.spi.RiskDecision.GateRequired;
+import io.casehub.api.spi.routing.StaticSetStrategy;
 import io.casehub.worker.api.PlannedAction;
 import io.casehub.life.api.HouseholdActionType;
 import io.casehub.life.api.HouseholdGroups;
@@ -129,20 +130,21 @@ class LifeActionRiskClassifierTest {
     @Test
     void healthMedicationFlag_candidateGroupsIncludesMember() {
         GateRequired result = (GateRequired) classifier.classify(action(HEALTH_MEDICATION_FLAG), null);
-        assertTrue(result.candidateGroups().contains(HouseholdGroups.MEMBER));
+        assertTrue(((StaticSetStrategy) result.candidateGroups()).values().contains(HouseholdGroups.MEMBER));
     }
 
     @Test
     void elderCareDecision_candidateGroupsIncludesMember() {
         GateRequired result = (GateRequired) classifier.classify(action(ELDER_CARE_DECISION), null);
-        assertTrue(result.candidateGroups().contains(HouseholdGroups.MEMBER));
+        assertTrue(((StaticSetStrategy) result.candidateGroups()).values().contains(HouseholdGroups.MEMBER));
     }
 
     @Test
     void bookingNonrefundable_candidateGroupsAdminOnly() {
         GateRequired result = (GateRequired) classifier.classify(action(BOOKING_NONREFUNDABLE), null);
-        assertEquals(1, result.candidateGroups().size());
-        assertEquals(HouseholdGroups.ADMIN, result.candidateGroups().get(0));
+        var groups = ((StaticSetStrategy) result.candidateGroups()).values();
+        assertEquals(1, groups.size());
+        assertTrue(groups.contains(HouseholdGroups.ADMIN));
     }
 
     // --- scope and expiry ---

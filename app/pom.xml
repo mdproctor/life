@@ -206,6 +206,12 @@
       <groupId>io.casehub</groupId>
       <artifactId>casehub-qhorus-testing</artifactId>
       <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>io.casehub</groupId>
+          <artifactId>casehub-qhorus-persistence-memory</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>

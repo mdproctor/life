@@ -26,7 +26,7 @@ public class LegalActionLedgerEntry extends LedgerEntry {
     @Column(name = "filing_deadline", nullable = false)
     public Instant filingDeadline;
 
-    @Column(name = "jurisdiction", length = 100)
+    @Column(name = "jurisdiction", length = 10)
     public String jurisdiction;
 
     @Enumerated(EnumType.STRING)

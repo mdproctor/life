@@ -26,7 +26,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
-import io.casehub.api.model.evaluator.ListEvaluator;
+import io.casehub.api.spi.routing.CandidateSetSpec;
+import io.casehub.api.spi.routing.StaticSetStrategy;
 
 /**
  * DSL test for the home-maintenance case definition.
@@ -76,7 +77,7 @@ class HomeMaintenanceCaseDefinitionsTest {
                 .orElseThrow();
         assertTrue(binding.target() instanceof HumanTaskTarget ht
                 && "Select a contractor quote".equals(ht.title())
-                && ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("household-admin")
+                && ht.candidateGroups() instanceof CandidateSetSpec.Inline inline && inline.strategy() instanceof StaticSetStrategy ss && ss.values().contains("household-admin")
                 && "casehubio/life/household".equals(ht.scope()));
     }
 
@@ -88,7 +89,7 @@ class HomeMaintenanceCaseDefinitionsTest {
                 .orElseThrow();
         assertTrue(binding.target() instanceof HumanTaskTarget ht
                 && "Verify job completion".equals(ht.title())
-                && ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("household-member")
+                && ht.candidateGroups() instanceof CandidateSetSpec.Inline inline && inline.strategy() instanceof StaticSetStrategy ss && ss.values().contains("household-member")
                 && "casehubio/life/household".equals(ht.scope()));
     }
 

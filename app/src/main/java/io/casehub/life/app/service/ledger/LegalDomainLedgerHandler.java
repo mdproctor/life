@@ -64,7 +64,7 @@ public class LegalDomainLedgerHandler implements DomainLedgerHandler {
         entry.workItemId     = ctx.workItemId;
         entry.legalObligation = workItem.title;
         entry.filingDeadline  = workItem.expiresAt;
-        entry.jurisdiction   = jurisdiction;
+        entry.jurisdiction   = ctx.jurisdiction != null ? ctx.jurisdiction : jurisdiction;
         entry.eventType       = event;
         entry.actionTaken     = event == LifeDecisionEventType.COMPLETED ? workItem.outcome : null;
 
