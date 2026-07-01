@@ -17,6 +17,18 @@
     Flyway migrations, foundation wiring. All CaseHub foundation layers wired here.</description>
 
   <dependencies>
+        <dependency>
+            <groupId>io.casehub</groupId>
+            <artifactId>casehub-memory-api</artifactId>
+            <version>0.2-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.casehub</groupId>
+            <artifactId>casehub-memory</artifactId>
+            <version>0.2-SNAPSHOT</version>
+            <scope>runtime</scope>
+        </dependency>
 
     <!-- Life domain model -->
     <dependency>
