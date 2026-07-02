@@ -1,8 +1,8 @@
 package io.casehub.life.app.routing;
 
-import io.casehub.blocks.oversight.ActionRiskClassifier;
-import io.casehub.blocks.oversight.RiskClassifier;
-import io.casehub.blocks.oversight.RiskDecision;
+import io.casehub.api.spi.ActionRiskClassifier;
+import io.casehub.api.spi.RiskClassifier;
+import io.casehub.api.spi.RiskDecision;
 import io.casehub.worker.api.PlannedAction;
 import io.casehub.life.api.HouseholdGroups;
 import io.casehub.platform.testing.FixedCurrentPrincipal;

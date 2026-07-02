@@ -2,9 +2,9 @@ package io.casehub.life.app.routing;
 
 import io.casehub.api.spi.routing.TrustRoutingPolicy;
 import io.casehub.api.spi.routing.TrustRoutingPolicyProvider;
-import io.casehub.blocks.routing.DoublePreference;
-import io.casehub.blocks.routing.TrustRoutingPolicyKeys;
-import io.casehub.blocks.routing.TrustRoutingPolicyResolver;
+import io.casehub.api.spi.routing.DoublePreference;
+import io.casehub.api.spi.routing.TrustRoutingPolicyKeys;
+import io.casehub.api.spi.routing.TrustRoutingPolicyResolver;
 import io.casehub.life.api.LifeDomain;
 import io.casehub.life.api.LifeRoutingPolicy;
 import io.casehub.life.api.LifeTrustDimensions;
