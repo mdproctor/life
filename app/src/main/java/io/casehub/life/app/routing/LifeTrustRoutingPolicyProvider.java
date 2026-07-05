@@ -28,6 +28,11 @@ public class LifeTrustRoutingPolicyProvider implements TrustRoutingPolicyProvide
                     .withFloor(LifeTrustDimensions.FACTUAL_ACCURACY, "factual-accuracy")
                     .withFloor(LifeTrustDimensions.PROACTIVE_ALERTING, "proactive-alerting");
 
+    @Override
+    public String id() {
+        return "life";
+    }
+
     @Inject
     PreferenceProvider preferenceProvider;
 
