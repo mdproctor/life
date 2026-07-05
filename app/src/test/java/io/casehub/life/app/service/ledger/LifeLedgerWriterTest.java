@@ -1,8 +1,8 @@
 package io.casehub.life.app.service.ledger;
 
 import io.casehub.ledger.api.model.LedgerEntryType;
-import io.casehub.ledger.runtime.model.LedgerEntry;
-import io.casehub.ledger.runtime.repository.LedgerEntryRepository;
+import io.casehub.ledger.api.model.LedgerEntry;
+import io.casehub.ledger.api.spi.LedgerEntryRepository;
 import io.casehub.life.app.entity.ExternalActor;
 import io.casehub.life.app.ledger.ExternalActorErasureLedgerEntry;
 import io.casehub.platform.api.identity.ActorType;
@@ -40,7 +40,7 @@ class LifeLedgerWriterTest {
 
     @Test
     void writeErasureEntry_setsRequiredFields() {
-        writer.writeErasureEntry(externalActor(), "household-admin", 0);
+        writer.writeErasureEntry(externalActor(), "household-admin", 0, 0);
 
         var entry = captureErasure();
         assertThat(entry.erasedActorId).isEqualTo(ACTOR_ID);
@@ -56,10 +56,19 @@ class LifeLedgerWriterTest {
 
     @Test
     void writeErasureEntry_setsMemoryRecordsErased() {
-        writer.writeErasureEntry(externalActor(), "household-admin", 7);
+        writer.writeErasureEntry(externalActor(), "household-admin", 7, 0);
 
         var entry = captureErasure();
         assertThat(entry.memoryRecordsErased).isEqualTo(7);
+    }
+
+    @Test
+    void writeErasureEntry_setsLedgerEntriesAffected() {
+        writer.writeErasureEntry(externalActor(), "household-admin", 3, 12);
+
+        var entry = captureErasure();
+        assertThat(entry.memoryRecordsErased).isEqualTo(3);
+        assertThat(entry.ledgerEntriesAffected).isEqualTo(12);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────

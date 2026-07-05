@@ -124,7 +124,7 @@ public class ExternalActorService {
             memoryRecordsErased = 0;
         }
 
-        lifeLedgerWriter.writeErasureEntry(actor, erasedBy, memoryRecordsErased);
+        lifeLedgerWriter.writeErasureEntry(actor, erasedBy, memoryRecordsErased, 0L);
     }
 
     public List<LifeTaskContextResponse> listTasks(final UUID actorId) {

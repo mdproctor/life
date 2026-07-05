@@ -1,8 +1,8 @@
 package io.casehub.life.app.service.ledger;
 
 import io.casehub.ledger.api.model.LedgerEntryType;
-import io.casehub.ledger.runtime.model.LedgerEntry;
-import io.casehub.ledger.runtime.repository.LedgerEntryRepository;
+import io.casehub.ledger.api.model.LedgerEntry;
+import io.casehub.ledger.api.spi.LedgerEntryRepository;
 import io.casehub.life.app.entity.ExternalActor;
 import io.casehub.life.app.ledger.ExternalActorErasureLedgerEntry;
 import io.casehub.platform.api.identity.ActorType;
@@ -19,13 +19,14 @@ public class LifeLedgerWriter {
     LedgerEntryRepository ledgerRepository;
 
     public void writeErasureEntry(final ExternalActor actor, final String erasedBy,
-                                   final int memoryRecordsErased) {
+                                   final int memoryRecordsErased, final long ledgerEntriesAffected) {
         ExternalActorErasureLedgerEntry entry = new ExternalActorErasureLedgerEntry();
         populateBase(entry, actor.id, erasedBy, ActorType.HUMAN, "GdprDataController");
         entry.erasedActorId = actor.id;
         entry.contactMethod = actor.contactMethod;
         entry.erasedBy = erasedBy;
         entry.memoryRecordsErased = memoryRecordsErased;
+        entry.ledgerEntriesAffected = ledgerEntriesAffected;
         ledgerRepository.save(entry, TenancyConstants.DEFAULT_TENANT_ID);
     }
 
