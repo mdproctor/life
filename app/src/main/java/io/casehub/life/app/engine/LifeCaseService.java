@@ -23,6 +23,8 @@ import io.casehub.life.api.request.CreateLifeCaseRequest;
 import io.casehub.life.api.response.LifeCaseResponse;
 import io.casehub.life.app.entity.LifeCaseTracker;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
@@ -48,12 +50,7 @@ public class LifeCaseService {
 
     private static final Logger LOG = Logger.getLogger(LifeCaseService.class);
 
-    @Inject AppointmentCycleCaseHub appointmentCycleCaseHub;
-    @Inject HomeMaintenanceCaseHub homeMaintenanceCaseHub;
-    @Inject TravelPlanCaseHub travelPlanCaseHub;
-    @Inject CareCoordinationCaseHub careCoordinationCaseHub;
-    @Inject ContractorCoordinationCaseHub contractorCoordinationCaseHub;
-    @Inject FinancialReviewCaseHub financialReviewCaseHub;
+    @Inject @Any Instance<LifeTypedCaseHub> caseHubs;
     @Inject CaseHubRuntime caseHubRuntime;
 
     public LifeCaseResponse startCase(CreateLifeCaseRequest request) {
@@ -113,13 +110,12 @@ public class LifeCaseService {
     }
 
     private CaseHub resolve(LifeCaseType type) {
-        return switch (type) {
-            case APPOINTMENT_CYCLE -> appointmentCycleCaseHub;
-            case HOME_MAINTENANCE -> homeMaintenanceCaseHub;
-            case TRAVEL_PLAN -> travelPlanCaseHub;
-            case CARE_COORDINATION -> careCoordinationCaseHub;
-            case CONTRACTOR_COORDINATION -> contractorCoordinationCaseHub;
-            case FINANCIAL_REVIEW -> financialReviewCaseHub;
-        };
+        return caseHubs.stream()
+                .filter(hub -> hub.lifeCaseType() == type)
+                .findFirst()
+                .orElseThrow(
+                        () ->
+                                new IllegalArgumentException(
+                                        "No CaseHub registered for type: " + type));
     }
 }

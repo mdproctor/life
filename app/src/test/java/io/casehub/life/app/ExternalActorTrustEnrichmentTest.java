@@ -1,6 +1,6 @@
 package io.casehub.life.app;
 
-import io.casehub.ledger.runtime.model.ActorTrustScore;
+import io.casehub.ledger.api.model.ScoreType;
 import io.casehub.ledger.runtime.repository.ActorTrustScoreRepository;
 import io.casehub.life.api.LifeActorIds;
 import io.casehub.platform.api.identity.ActorType;
@@ -54,7 +54,7 @@ class ExternalActorTrustEnrichmentTest {
     UUID createActorAndSeedTrustScore() {
         UUID id = createActor();
         String lifeActorId = LifeActorIds.of(id);
-        trustScoreRepo.upsert(lifeActorId, ActorTrustScore.ScoreType.GLOBAL,
+        trustScoreRepo.upsert(lifeActorId, ScoreType.GLOBAL,
             null, null, ActorType.HUMAN, 0.8,
             10, 1, 8.0, 2.0, 8, 2, Instant.now());
         return id;

@@ -1,6 +1,6 @@
 package io.casehub.life.app.service;
 
-import io.casehub.ledger.runtime.repository.LedgerEntryRepository;
+import io.casehub.ledger.api.spi.LedgerEntryRepository;
 import io.casehub.life.api.LifeActorIds;
 import io.casehub.life.api.LifeActorType;
 import io.casehub.life.app.LifeTestFixtures;

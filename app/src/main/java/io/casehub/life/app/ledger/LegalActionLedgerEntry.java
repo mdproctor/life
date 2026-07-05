@@ -1,7 +1,7 @@
 package io.casehub.life.app.ledger;
 
 import io.casehub.life.app.LifeDecisionEventType;
-import io.casehub.ledger.runtime.model.LedgerEntry;
+import io.casehub.ledger.runtime.model.jpa.JpaLedgerEntry;
 import jakarta.persistence.Column;
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
@@ -15,7 +15,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "legal_action_ledger_entry")
 @DiscriminatorValue("LEGAL_ACTION")
-public class LegalActionLedgerEntry extends LedgerEntry {
+public class LegalActionLedgerEntry extends JpaLedgerEntry {
 
     @Column(name = "work_item_id", nullable = false)
     public UUID workItemId;

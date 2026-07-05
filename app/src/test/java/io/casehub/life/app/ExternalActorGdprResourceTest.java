@@ -1,6 +1,6 @@
 package io.casehub.life.app;
 
-import io.casehub.ledger.runtime.repository.LedgerEntryRepository;
+import io.casehub.ledger.api.spi.LedgerEntryRepository;
 import io.casehub.platform.api.identity.TenancyConstants;
 import io.casehub.platform.testing.FixedCurrentPrincipal;
 import io.casehub.life.api.LifeActorType;
