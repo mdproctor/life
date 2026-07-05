@@ -4,9 +4,11 @@ import io.casehub.life.api.HouseholdGroups;
 import io.casehub.life.api.LifeActorType;
 import io.casehub.life.api.request.CreateExternalActorRequest;
 import io.casehub.life.api.request.UpdateExternalActorRequest;
+import io.casehub.life.api.response.ErasureResponse;
 import io.casehub.life.api.response.ExternalActorResponse;
 import io.casehub.life.api.response.LifeTaskContextResponse;
 import io.casehub.life.app.service.ExternalActorService;
+import io.casehub.life.app.service.LifeGdprErasureService;
 import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.smallrye.common.annotation.Blocking;
 import jakarta.annotation.security.RolesAllowed;
@@ -38,6 +40,9 @@ public class ExternalActorResource {
 
     @Inject
     ExternalActorService service;
+
+    @Inject
+    LifeGdprErasureService gdprErasureService;
 
     @Inject
     CurrentPrincipal currentPrincipal;
@@ -87,8 +92,8 @@ public class ExternalActorResource {
     @Path("/{id}/personal-data")
     @RolesAllowed(HouseholdGroups.ADMIN)
     public Response erasePersonalData(@PathParam("id") final UUID id) {
-        service.erase(id, currentPrincipal.actorId());
-        return Response.noContent().build();
+        ErasureResponse result = gdprErasureService.erase(id, currentPrincipal.actorId());
+        return Response.ok(result).build();
     }
 
     @GET

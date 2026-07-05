@@ -48,12 +48,18 @@ class ExternalActorGdprResourceTest {
     }
 
     @Test
-    void eraseActor_204_and_piiNulled() {
+    void eraseActor_200_and_piiNulled() {
         final UUID actorId = createActor();
 
         given()
                 .when().delete("/external-actors/" + actorId + "/personal-data")
-                .then().statusCode(204);
+                .then()
+                .statusCode(200)
+                .body("erasedActorId", equalTo(actorId.toString()))
+                .body("erasedAt", notNullValue())
+                .body("memoryRecordsErased", equalTo(0))
+                .body("ledgerEntriesAffected", notNullValue())
+                .body("tokenisationEnabled", equalTo(true));
 
         final ExternalActor persisted = ExternalActor.findById(actorId);
         assertThat(persisted.name).isEqualTo("[ERASED]");
@@ -67,7 +73,7 @@ class ExternalActorGdprResourceTest {
 
         given()
                 .when().delete("/external-actors/" + actorId + "/personal-data")
-                .then().statusCode(204);
+                .then().statusCode(200);
 
         var entry = ledgerRepository.findLatestBySubjectId(actorId, TenancyConstants.DEFAULT_TENANT_ID).orElseThrow();
         assertThat(entry).isInstanceOf(io.casehub.life.app.ledger.ExternalActorErasureLedgerEntry.class);
@@ -88,7 +94,7 @@ class ExternalActorGdprResourceTest {
     @Test
     void eraseActor_409_whenAlreadyErased() {
         final UUID actorId = createActor();
-        given().when().delete("/external-actors/" + actorId + "/personal-data").then().statusCode(204);
+        given().when().delete("/external-actors/" + actorId + "/personal-data").then().statusCode(200);
         given().when().delete("/external-actors/" + actorId + "/personal-data").then().statusCode(409);
     }
 
@@ -109,13 +115,13 @@ class ExternalActorGdprResourceTest {
 
         given()
                 .when().delete("/external-actors/" + actorId + "/personal-data")
-                .then().statusCode(204);
+                .then().statusCode(200);
     }
 
     @Test
     void getActor_includesGdprErasedAt_afterErasure() {
         final UUID actorId = createActor();
-        given().when().delete("/external-actors/" + actorId + "/personal-data").then().statusCode(204);
+        given().when().delete("/external-actors/" + actorId + "/personal-data").then().statusCode(200);
 
         given()
                 .when().get("/external-actors/" + actorId)

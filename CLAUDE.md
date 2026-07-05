@@ -227,6 +227,7 @@ Read these **before designing**, not after. The concern column tells you when ea
 | Testing a WorkItem SLA | WorkItem test patterns in `casehub-work.md` |
 | Seeding WorkItemTemplates in tests | Flyway is disabled in tests (`migrate-at-start=false`). Seed templates via `LifeTestFixtures.seedStandardTemplates()` and/or `LifeTestFixtures.seedEscalationTemplate()` from `@BeforeEach @Transactional`. Canonical UUIDs 001–004; idempotency guard by template name. **Always set `tenancyId` to `"278776f9-e1b0-46fb-9032-8bddebdcf9ce"` — V35 adds NOT NULL with no H2 default.** See `app/src/test/java/io/casehub/life/app/LifeTestFixtures.java`. |
 | Non-JPA plain SQL tables in H2 tests | Hibernate `drop-and-create` only creates JPA entity tables. Plain SQL tables (e.g. `ledger_subject_sequence`) must be created via `quarkus.hibernate-orm."<pu>".sql-load-script` pointing to a SQL file with `CREATE TABLE IF NOT EXISTS`. See `app/src/test/resources/import-qhorus.sql` and PP-20260609-e2c3a1. **When the ledger SNAPSHOT changes `ledger_subject_sequence` schema** (e.g. adding `tenancy_id` column in composite PK), update `import-qhorus.sql` to match — mismatch causes "Column not found" HTTP 500 on any ledger write. |
+| Testing LedgerErasureService integration | Enable `casehub.ledger.identity.tokenisation.enabled=true` and `casehub.ledger.erasure-receipt.enabled=true` in test config (GE-20260531-46f8ab). Maven: exclude `casehub-qhorus-persistence-memory` from `casehub-qhorus-testing` dep (GE-20260630-69e447 — duplicate `@Alternative @Priority(1)` stores cause 35 CDI ambiguity errors). |
 | Testing async CDI observers | Call the observer method directly through the injected CDI proxy — bypasses event dispatch and debounce. Method-level `@Transactional(REQUIRES_NEW)` is honoured via CDI proxy. Do NOT use `@TestTransaction` on the test method — it blocks the REQUIRES_NEW from seeing committed setup records. See GE-20260529-9f3557 and `LifeWatchdogAlertObserverTest`. |
 | Testing ledger writers (unit) | Mock `LedgerEntryRepository` with Mockito. Do NOT assert on `entry.id` or `entry.occurredAt` — these are set by `LedgerEntry.@PrePersist` which is bypassed in mocked tests. See `LifeLedgerWriterTest`. |
 | Mocking CDI beans in `@QuarkusTest` | `quarkus-junit5-mockito` provides `@InjectMock` — replaces a CDI bean with a Mockito mock for the test class. Use for collaborator beans (e.g. `CaseMemoryStore`) when you need to control return values or verify interactions. Do NOT use `mockStatic` for Panache Active Record entities — static methods are inherited from `PanacheEntityBase` and Mockito cannot intercept them (GE-20260629-74fc65). See `ExternalActorServiceTest`. |
@@ -250,7 +251,7 @@ Read these **before designing**, not after. The concern column tells you when ea
 **Life domain entities:**
 - `LifeDomain` enum — `HOUSEHOLD`, `HEALTH`, `FINANCE`, `FAMILY_SCHEDULING`, `TRAVEL`, `LEGAL`, `CONTRACTOR_COORDINATION`, `ELDER_CARE`
 - `ExternalActor` — contractor, doctor, service provider, or institution: `{name, actorType, contactMethod, contactValue, gdprErasedAt}` — the one genuine JPA domain entity
-- `LifeTaskContext` — domain supplement for foundation WorkItems: `{workItemId, domain, externalActorId, recurrence}` — carries life-specific context that has no foundation home
+- `LifeTaskContext` — domain supplement for foundation WorkItems: `{workItemId, domain, externalActorId, recurrence, jurisdiction}` — carries life-specific context that has no foundation home. `jurisdiction` is optional (ISO 3166-1/2, e.g. "GB", "US-CA"); `LegalDomainLedgerHandler` prefers it over tenant-wide config default.
 
 Note: `HouseholdTask`, `LifeGoal`, `LifeEvent` were removed in Layer 2 — they duplicated foundation primitives (WorkItem, CaseInstance, LedgerEntry). See `docs/specs/2026-05-27-layer2-casehub-work-sla.md` and parent#79.
 
@@ -265,7 +266,9 @@ Note: `HouseholdTask`, `LifeGoal`, `LifeEvent` were removed in Layer 2 — they 
 - `LifeLedgerWriter` — unified writer service; owns `sequenceNumber` computation and base field assembly. `@PrePersist` on `LedgerEntry` handles `id` and `occurredAt`.
 - `LifeDecisionLedgerObserver` — CDI observer for `SlaBreachEvent` (HEALTH/LEGAL/FINANCE SLA_BREACH) and `WorkItemLifecycleEvent` (COMPLETED only). `@Transactional(REQUIRES_NEW)`.
 - GDPR Art.17 erasure: `DELETE /external-actors/{id}/personal-data` — nullifies PII, calls `CaseMemoryStore.eraseEntity()` (guarded by `MemoryCapabilityException` catch → 0), writes `ExternalActorErasureLedgerEntry` with `memoryRecordsErased` count. `erasedBy` from `CurrentPrincipal.actorId()`. Guards: 404/409 already-erased/409 active-tasks.
-- actorId convention: `"life-system"` for system events; GDPR erasure actorId comes from `currentPrincipal.actorId()` (auth wired: life#40).
+- actorId convention: `"life-system"` for system events; GDPR erasure actorId comes from `currentPrincipal.actorId()` (auth wired: life#40). Erasure endpoint returns 200 with `ErasureResponse(erasedActorId, erasedAt, memoryRecordsErased, ledgerEntriesAffected, tokenisationEnabled)`.
+- `LifeGdprErasureService` — dedicated erasure pipeline: PII nullification → memory erasure → `LedgerErasureService.erase()` tokenisation → `ExternalActorErasureLedgerEntry` write. Replaces inline `ExternalActorService.erase()`.
+- `ExternalActorErasureLedgerEntry` — gained `ledgerEntriesAffected` (long) for self-contained erasure proof in Merkle chain.
 
 **Layer 5 additions:**
 - `LifeCaseTracker` — JPA entity tracking active engine cases by type for cross-case signal lookup: `{id, caseType, engineCaseId, status, createdAt, completedAt}`. Default datasource.
@@ -410,8 +413,8 @@ api/    — pure Java: LifeDomain enum, ExternalActor request/response records,
           Zero framework imports. No JPA.
 
 app/    — Quarkus: JPA entities (ExternalActor, LifeTaskContext, LifeCommitmentRecord,
-          LifeCaseTracker), REST resources, Flyway migrations (db/life/migration/, V100–V107),
-          service layer, SPI implementations (LifeSlaBreachPolicy, LifeCommitmentStrategy + 3 impls),
+          LifeCaseTracker), REST resources, Flyway migrations (db/life/migration/, V100–V110),
+          service layer (LifeGdprErasureService — GDPR erasure pipeline), SPI implementations (LifeSlaBreachPolicy, LifeCommitmentStrategy + 3 impls),
           infrastructure (LifeChannelInitializer), observers (LifeOversightResponseObserver,
           LifeWatchdogAlertObserver, LifeDecisionLedgerObserver, LifeCaseTrackerObserver),
           engine (io.casehub.life.app.engine — LifeTypedCaseHub abstract base + 6 subclasses + CareEpisodeCaseHub (YamlCaseHub) + FamilyVoteCaseHub (YamlCaseHub) +
