@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -41,6 +42,7 @@ class LifeHeartbeatJobTest {
 
     private LifeOpenClawChatModelFactory mockFactory;
     private CaseHubRuntime mockRuntime;
+    private LifeChannelContextProvider mockChannelProvider;
     private LifeHeartbeatJob job;
     private final UUID caseId = UUID.randomUUID();
 
@@ -68,9 +70,14 @@ class LifeHeartbeatJobTest {
         when(mockRuntime.signal(any(UUID.class), any(String.class), any()))
                 .thenReturn(CompletableFuture.completedFuture(null));
 
+        mockChannelProvider = mock(LifeChannelContextProvider.class);
+        when(mockChannelProvider.gatherContext(any(UUID.class)))
+                .thenReturn(Map.of("channelContext", Map.of()));
+
         job = new LifeHeartbeatJob();
         job.openClawFactory = mockFactory;
         job.caseHubRuntime = mockRuntime;
+        job.channelContextProvider = mockChannelProvider;
     }
 
     @Test
@@ -106,5 +113,42 @@ class LifeHeartbeatJobTest {
         Map<String, Object> report = (Map<String, Object>) captor.getValue();
         assertThat(report).containsKey("progressPercent");
         assertThat(report.get("escalationRequired")).isEqualTo(false);
+    }
+
+    @Test
+    void executeMergesChannelContextIntoCaseContext() throws Exception {
+        when(mockChannelProvider.gatherContext(caseId)).thenReturn(
+                Map.of("channelContext", Map.of("delegation", List.of(
+                        Map.of("sender", "finance-agent", "type", "STATUS",
+                                "content", "Budget warning", "createdAt", "2026-07-07T10:00:00Z")))));
+
+        JobExecutionContext ctx = mock(JobExecutionContext.class);
+        JobDataMap data = new JobDataMap();
+        data.put("agent", "HOME");
+        data.put("caseId", caseId.toString());
+        data.put("capabilityName", "contractor-sentinel");
+        when(ctx.getMergedJobDataMap()).thenReturn(data);
+
+        job.execute(ctx);
+
+        verify(mockChannelProvider).gatherContext(caseId);
+        verify(mockRuntime).signal(eq(caseId), eq("sentinelReport"), any(Map.class));
+    }
+
+    @Test
+    void executeCompletesWhenChannelContextFails() throws Exception {
+        when(mockChannelProvider.gatherContext(any(UUID.class)))
+                .thenThrow(new RuntimeException("Channel DB unavailable"));
+
+        JobExecutionContext ctx = mock(JobExecutionContext.class);
+        JobDataMap data = new JobDataMap();
+        data.put("agent", "HOME");
+        data.put("caseId", caseId.toString());
+        data.put("capabilityName", "contractor-sentinel");
+        when(ctx.getMergedJobDataMap()).thenReturn(data);
+
+        job.execute(ctx);
+
+        verify(mockRuntime).signal(eq(caseId), eq("sentinelReport"), any(Map.class));
     }
 }

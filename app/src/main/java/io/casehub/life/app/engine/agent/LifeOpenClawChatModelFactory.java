@@ -41,6 +41,7 @@ public class LifeOpenClawChatModelFactory {
     private DirectCallBridge bridge;
     private OpenClawHookClient hookClient;
     private String deliveryBaseUrl;
+    private String deliveryToken;
     private int timeoutSeconds;
 
     @Inject
@@ -50,6 +51,7 @@ public class LifeOpenClawChatModelFactory {
         this.bridge = bridge;
         this.hookClient = hookClient;
         this.deliveryBaseUrl = config.delivery().baseUrl();
+        this.deliveryToken = config.delivery().token().orElse(null);
         this.timeoutSeconds = config.agent().defaultTimeoutSeconds();
     }
 
@@ -58,6 +60,7 @@ public class LifeOpenClawChatModelFactory {
         this.bridge = null;
         this.hookClient = null;
         this.deliveryBaseUrl = null;
+        this.deliveryToken = null;
         this.timeoutSeconds = 0;
     }
 
@@ -69,7 +72,7 @@ public class LifeOpenClawChatModelFactory {
      */
     public ChatModelProvider forAgent(LifeAgent agent) {
         var provider = new OpenClawAgentProvider(
-                bridge, hookClient, agent.persona(), deliveryBaseUrl);
+                bridge, hookClient, agent.persona(), deliveryBaseUrl, deliveryToken);
         var chatModel = new OpenClawChatModel(
                 provider, Duration.ofSeconds(timeoutSeconds));
         return new ChatModelProvider() {

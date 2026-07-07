@@ -498,7 +498,11 @@ Layer 7 (full): + casehub-openclaw — OpenClaw as WorkerProvisioner; skill ecos
          (Quartz) invokes Agent.execute() periodically, signals results via
          CaseHubRuntime.signal(). LifeProvisionerCleanupObserver handles termination.
          LifeSentinelConfig maps capabilities to LifeAgent + heartbeat interval.
-         ✅ COMPLETE
+         LifeChannelContextProvider (life#61) enriches heartbeat agents with recent
+         qhorus channel messages (delegation, oversight, per-actor) before execution.
+         Config: `casehub.life.channel-context.message-limit` (default 10).
+         Skill integration (#60) blocked on casehub-openclaw Epic 4.
+         ✅ COMPLETE (wiring + channel context)  🔲 PENDING (skill integration — #60)
 ```
 
 ### Foundation Gates

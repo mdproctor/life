@@ -28,22 +28,29 @@ import io.casehub.life.app.engine.agent.PatientStatusSentinelReport;
 import io.casehub.worker.api.WorkerResult;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 import org.quartz.Job;
 import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
 @ApplicationScoped
 public class LifeHeartbeatJob implements Job {
 
+    private static final Logger LOG = Logger.getLogger(LifeHeartbeatJob.class);
+
     @Inject
     LifeOpenClawChatModelFactory openClawFactory;
 
     @Inject
     CaseHubRuntime caseHubRuntime;
+
+    @Inject
+    LifeChannelContextProvider channelContextProvider;
 
     @Override
     @SuppressWarnings("unchecked")
@@ -56,13 +63,20 @@ public class LifeHeartbeatJob implements Job {
         Map<String, Object> caseContext = (Map<String, Object>)
                 caseHubRuntime.query(caseId, ".").toCompletableFuture().join();
 
+        Map<String, Object> enrichedContext = new HashMap<>(caseContext);
+        try {
+            enrichedContext.putAll(channelContextProvider.gatherContext(caseId));
+        } catch (Exception e) {
+            LOG.warnf(e, "Channel context gathering failed for case %s — proceeding with case context only", caseId);
+        }
+
         Agent sentinelAgent = Agent.builder()
                 .model(openClawFactory.forAgent(agent))
                 .systemPrompt(sentinelSystemPrompt(capabilityName))
                 .responseSchema(sentinelResponseSchema(capabilityName))
                 .build();
 
-        WorkerResult result = sentinelAgent.execute(caseContext);
+        WorkerResult result = sentinelAgent.execute(enrichedContext);
 
         caseHubRuntime.signal(caseId, "sentinelReport", result.output())
                 .toCompletableFuture().join();
