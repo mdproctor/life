@@ -128,7 +128,7 @@ class LifeDecisionLedgerObserverTest {
     UUID createWorkItemWithContext(String category, LifeDomain domain) {
         var req = WorkItemCreateRequest.builder()
                 .title("Test " + category + " task")
-                .category(category)
+                .types(java.util.List.of(category))
                 .priority(WorkItemPriority.MEDIUM)
                 .candidateGroups("household-member")
                 .createdBy("life-system")
@@ -150,7 +150,7 @@ class LifeDecisionLedgerObserverTest {
     UUID createBareWorkItem() {
         var req = WorkItemCreateRequest.builder()
                 .title("Bare task — no LifeTaskContext")
-                .category("other")
+                .types(java.util.List.of("other"))
                 .priority(WorkItemPriority.MEDIUM)
                 .candidateGroups("household-member")
                 .createdBy("life-system")

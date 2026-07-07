@@ -161,7 +161,7 @@ class ExternalActorGdprResourceTest {
     void createCompletedTaskForActor(UUID actorId) {
         var req = WorkItemCreateRequest.builder()
                 .title("Completed task")
-                .category("household")
+                .types(java.util.List.of("household"))
                 .priority(WorkItemPriority.MEDIUM)
                 .candidateGroups("household-member")
                 .createdBy("life-system")
@@ -184,7 +184,7 @@ class ExternalActorGdprResourceTest {
     void createActiveTaskForActor(UUID actorId) {
         var req = WorkItemCreateRequest.builder()
                 .title("Active task")
-                .category("household")
+                .types(java.util.List.of("household"))
                 .priority(WorkItemPriority.MEDIUM)
                 .candidateGroups("household-member")
                 .createdBy("life-system")

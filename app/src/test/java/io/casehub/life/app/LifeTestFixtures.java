@@ -40,7 +40,7 @@ public final class LifeTestFixtures {
             WorkItemTemplate t = new WorkItemTemplate();
             t.id = UUID.fromString(id);
             t.name = name;
-            t.category = category;
+            t.typePaths = category;
             t.priority = priority;
             t.candidateGroups = candidateGroups;
             t.defaultExpiryHours = expiryHours;

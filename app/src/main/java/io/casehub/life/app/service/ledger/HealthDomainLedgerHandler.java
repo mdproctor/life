@@ -60,7 +60,8 @@ public class HealthDomainLedgerHandler implements DomainLedgerHandler {
         entry.actorRole      = "HealthDecisionAudit";
         entry.workItemId     = ctx.workItemId;
         entry.providerId     = ctx.externalActorId;
-        entry.taskCategory   = workItem.category;
+        entry.taskCategory   = workItem.types != null && !workItem.types.isEmpty()
+                ? workItem.types.iterator().next().path : null;
         entry.slaDeadline    = workItem.expiresAt;
         entry.eventType      = event;
         entry.outcome        = event == LifeDecisionEventType.COMPLETED ? workItem.outcome : null;

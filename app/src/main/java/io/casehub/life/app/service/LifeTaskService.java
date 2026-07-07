@@ -71,13 +71,14 @@ public class LifeTaskService {
                         template.defaultExpiryHours != null ? template.defaultExpiryHours : 24L,
                         ChronoUnit.HOURS);
 
-        // Derive LifeDomain from template category.
-        final LifeDomain domain = LifeDomain.fromCategory(template.category).orElse(LifeDomain.HOUSEHOLD);
+        // Derive LifeDomain from template type path.
+        final String typePath = template.typePaths != null ? template.typePaths.split(",")[0].trim() : null;
+        final LifeDomain domain = LifeDomain.fromCategory(typePath).orElse(LifeDomain.HOUSEHOLD);
 
         // Build WorkItemCreateRequest — groups come from template only, not from caller.
         final WorkItemCreateRequest workReq = WorkItemCreateRequest.builder()
                 .title(req.title())
-                .category(template.category)
+                .types(typePath != null ? List.of(typePath) : List.of())
                 .priority(template.priority)
                 .candidateGroups(candidateGroups)
                 .createdBy("life-system")

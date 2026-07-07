@@ -1,25 +1,22 @@
 package io.casehub.life.app;
 
-import io.casehub.work.runtime.service.ExpiryLifecycleService;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.security.TestSecurity;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.concurrent.TimeUnit;
 
 import static io.restassured.RestAssured.given;
+import static org.awaitility.Awaitility.await;
 import static org.hamcrest.Matchers.*;
 
 @QuarkusTest
 @TestSecurity(user = "household-admin", roles = {"household-admin"})
 class LifeTaskResourceTest {
-
-    @Inject
-    ExpiryLifecycleService expiryLifecycleService;
 
     @BeforeEach
     @Transactional
@@ -92,19 +89,23 @@ class LifeTaskResourceTest {
     }
 
     @Test
-    void createLifeTask_withPastDeadline_slaBreachFiresOnCheckExpired() {
-        // Create a task with a deadline already in the past
-        given()
+    void createLifeTask_withPastDeadline_slaBreachEscalatesToAdmin() {
+        String workItemId = given()
                 .contentType("application/json")
                 .body("""
                         {"templateRef":"household-task","title":"Overdue task","deadline":"%s"}
                         """.formatted(Instant.now().minus(1, ChronoUnit.HOURS)))
                 .when().post("/life-tasks")
-                .then().statusCode(201);
+                .then().statusCode(201)
+                .extract().path("workItemId");
 
-        // ExpiryLifecycleService is injected (not excluded from CDI).
-        // Calling checkExpired() directly triggers LifeSlaBreachPolicy for expired WorkItems.
-        // Verifies the SLA enforcement pipeline runs without exception.
-        expiryLifecycleService.checkExpired();
+        // Quartz ExpiryTimerJob fires automatically for past deadlines.
+        // LifeSlaBreachPolicy escalates to household-admin on first breach.
+        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() ->
+                given()
+                        .when().get("/life-tasks/" + workItemId)
+                        .then()
+                        .statusCode(200)
+                        .body("candidateGroups", hasItem("household-admin")));
     }
 }
