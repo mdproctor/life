@@ -6,6 +6,22 @@ title: Care coordination — assess, plan, assign, episode, health check, escala
 
 spec:
 
+  ## --- CBR -----------------------------------------------------------------
+  cbr:
+    features:
+      careType: ".careRequest.careType"
+      patientRiskLevel: ".careRequest.patientRiskLevel"
+      hoursPerWeek: ".carePlan.hoursPerWeek"
+    weights:
+      careType: 3.0
+      patientRiskLevel: 2.0
+      hoursPerWeek: 1.0
+    topK: 5
+    minSimilarity: 0.3
+    domain: casehubio/life/eldercare
+    caseType: care-coordination
+    timing: case-lifetime
+
   ## --- Capabilities --------------------------------------------------------
   capabilities:
     - name: needs-assessment

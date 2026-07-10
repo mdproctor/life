@@ -6,6 +6,22 @@ title: Appointment cycle — book, confirm, prep, attend, record
 
 spec:
 
+  ## ─── CBR ────────────────────────────────────────────────────────────────────
+  cbr:
+    features:
+      conditionCategory: ".appointmentType"
+      providerType: ".provider.type"
+      followUpIntervalDays: ".visitNotes.followUpDays"
+    weights:
+      conditionCategory: 3.0
+      providerType: 1.5
+      followUpIntervalDays: 1.0
+    topK: 5
+    minSimilarity: 0.3
+    domain: casehubio/life/health
+    caseType: appointment-cycle
+    timing: case-lifetime
+
   ## ─── Capabilities ───────────────────────────────────────────────────────────
   capabilities:
     - name: book-appointment

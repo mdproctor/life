@@ -350,6 +350,28 @@ Note: `HouseholdTask`, `LifeGoal`, `LifeEvent` were removed in Layer 2 — they 
   MaintenanceSentinelReport, FollowUpSentinelReport, CareQualitySentinelReport,
   PatientStatusSentinelReport, AnomalySentinelReport, BookingSentinelReport.
 
+**Layer 8 additions (CBR — Case-Based Reasoning, life#52):**
+- `LifeCaseOutcomeCbrWriter` — `app/cbr/` `@ApplicationScoped` implements `CaseOutcomeObserver`;
+  per-case retention: on terminal state, extracts features via CbrConfig JQ expressions,
+  writes `PlanCbrCase` to `CbrCaseMemoryStore`. Interim `tenantId = "life-personal"` until
+  engine adds tenantId to `CaseOutcomeEvent`.
+- `LifeRoutingOutcomeRecorder` — `app/cbr/` `@ApplicationScoped` implements `RoutingOutcomeRecorder`;
+  per-routing-decision retention: per worker execution, resolves case type via `CaseTypeLookup`,
+  extracts features via CbrConfig JQ, writes `PlanCbrCase` with `PlanTrace`. Reactive pipeline.
+- `LifeCbrFeatureSchemaRegistrar` — `app/cbr/` `@ApplicationScoped` `@Observes StartupEvent`;
+  registers 6 `CbrFeatureSchema` instances with `CbrCaseMemoryStore`. SimilaritySpecs:
+  `CategoricalTable` for season/severity, `GaussianDecay` for cost/time fields.
+- `LifeCbrDescriptionProvider` — `app/cbr/` internal SPI; 6 implementations in `app/cbr/describe/`.
+  `caseType()`, `describeProblem()`, `describeSolution()`, `extractEntityId()`.
+- `spec.cbr` on 6 YAML case definitions — JQ feature extractors, weights, domain, timing=case-lifetime.
+  Domains: `casehubio/life/{contractor,household,health,eldercare,finance,travel}`.
+- `casehub-neocortex-memory-api` + `casehub-neocortex-memory-cbr-inmem` (test) — Maven dependencies.
+  `InMemoryCbrCaseMemoryStore` (`@Alternative @Priority(2)`) in tests; `NoOpCbrCaseMemoryStore`
+  (`@DefaultBean`) in production until Qdrant is configured.
+- Engine dependencies: engine#505 (routing strategy consumes experiences — OPEN),
+  engine#683 (RoutingPromptSection promotion — OPEN). Life data flows but has no behavioral
+  effect on routing until #505 lands.
+
 **Capability tags:**
 - `household-management` — routine household coordination: grocery ordering, maintenance scheduling, contractor liaison
 - `health-coordination` — appointment booking, medication reminders, follow-up tracking, GP escalation
@@ -418,6 +440,8 @@ app/    — Quarkus: JPA entities (ExternalActor, LifeTaskContext, LifeCommitmen
           trust routing YAML config (app/src/main/resources/casehub/life/trust-routing.yaml).
           Ledger subclasses in io.casehub.life.app.ledger (qhorus PU);
           ledger join table migrations at db/life/ledger/migration/ (V2100+).
+          cbr (io.casehub.life.app.cbr — LifeCaseOutcomeCbrWriter, LifeRoutingOutcomeRecorder,
+          LifeCbrFeatureSchemaRegistrar, LifeCbrDescriptionProvider + 6 impls in cbr/describe/).
 ```
 
 ---
@@ -496,6 +520,16 @@ Layer 7 (full): + casehub-openclaw — OpenClaw as WorkerProvisioner; skill ecos
          Config: `casehub.life.channel-context.message-limit` (default 10).
          Skill integration (#60) blocked on casehub-openclaw Epic 4.
          ✅ COMPLETE (wiring + channel context)  🔲 PENDING (skill integration — #60)
+
+Layer 8: + casehub-neocortex (CBR) — Case-Based Reasoning for adaptive life automation.
+         Per-case retention via CaseOutcomeObserver (LifeCaseOutcomeCbrWriter), per-routing-decision
+         retention via RoutingOutcomeRecorder (LifeRoutingOutcomeRecorder). 6 domain feature schemas
+         with CategoricalTable and GaussianDecay SimilaritySpecs (LifeCbrFeatureSchemaRegistrar).
+         YAML spec.cbr on all 6 eligible case definitions with JQ feature extractors.
+         LifeCbrDescriptionProvider (6 impls) for domain problem/solution/entityId extraction.
+         Engine dependencies: engine#505 (routing consumes experiences — OPEN),
+         engine#683 (RoutingPromptSection — OPEN).
+         ✅ COMPLETE (retention + retrieval config)  🔲 PENDING (routing effect — engine#505)
 ```
 
 ### Foundation Gates
@@ -510,6 +544,8 @@ Layer 7 (full): + casehub-openclaw — OpenClaw as WorkerProvisioner; skill ecos
 | Adaptive CasePlanModel (travel, care) | engine P0 complete |
 | Trust-weighted agent routing | casehub-engine-ledger wired ✅; TrustRoutingPolicyProvider implemented; attestation pipeline active; single-candidate routing until Layer 7 |
 | OpenClaw as WorkerProvisioner | Pending — research spec 2026-05-25 |
+| CBR retention + retrieval config | casehub-neocortex-memory-api ✅; CaseOutcomeObserver ✅; RoutingOutcomeRecorder ✅; CbrRetrievalService ✅ |
+| CBR-informed routing | engine#505 OPEN — routing strategy ignores experiences until this lands |
 
 ---
 

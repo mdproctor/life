@@ -6,6 +6,26 @@ title: Home maintenance cycle — inspect, quote, approve, commit, monitor, veri
 
 spec:
 
+  ## --- CBR -----------------------------------------------------------------
+  cbr:
+    features:
+      issueType: ".request.issueType"
+      severity: ".request.severity"
+      season: ".request.season"
+      estimatedCost: ".quotes.selectedQuote.amount"
+      resolutionDays: ".jobStatus.resolutionDays"
+    weights:
+      issueType: 3.0
+      severity: 2.0
+      estimatedCost: 1.5
+      season: 1.0
+      resolutionDays: 0.5
+    topK: 5
+    minSimilarity: 0.3
+    domain: casehubio/life/household
+    caseType: home-maintenance
+    timing: case-lifetime
+
   ## --- Capabilities --------------------------------------------------------
   capabilities:
     - name: schedule-inspection

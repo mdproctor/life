@@ -6,6 +6,28 @@ title: Contractor coordination — quote, watchdog, respond, approve, monitor, p
 
 spec:
 
+  ## --- CBR -----------------------------------------------------------------
+  cbr:
+    features:
+      problemType: ".contractorRequest.problemType"
+      season: ".contractorRequest.season"
+      propertyArea: ".contractorRequest.propertyArea"
+      budget: ".contractorRequest.budget"
+      quotedCost: ".quoteResponse.quotedAmount"
+      slaHours: ".contractorRequest.slaHours"
+    weights:
+      problemType: 3.0
+      budget: 2.0
+      season: 1.5
+      propertyArea: 1.0
+      slaHours: 1.0
+      quotedCost: 0.5
+    topK: 5
+    minSimilarity: 0.3
+    domain: casehubio/life/contractor
+    caseType: contractor-coordination
+    timing: case-lifetime
+
   ## --- Capabilities --------------------------------------------------------
   capabilities:
     - name: request-quote

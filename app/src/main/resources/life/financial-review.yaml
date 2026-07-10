@@ -6,6 +6,24 @@ title: Financial review — gather data, analyse, escalate anomalies, oversight 
 
 spec:
 
+  ## --- CBR -----------------------------------------------------------------
+  cbr:
+    features:
+      category: ".budgetData.category"
+      amountRange: ".budgetData.totalSpend"
+      amount: ".budgetData.totalSpend"
+      approvalThreshold: ".budgetData.approvalThreshold"
+    weights:
+      category: 3.0
+      amount: 2.0
+      approvalThreshold: 1.0
+      amountRange: 0.5
+    topK: 5
+    minSimilarity: 0.3
+    domain: casehubio/life/finance
+    caseType: financial-review
+    timing: case-lifetime
+
   ## --- Capabilities --------------------------------------------------------
   capabilities:
     - name: gather-data

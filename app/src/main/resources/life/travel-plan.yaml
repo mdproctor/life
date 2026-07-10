@@ -6,6 +6,28 @@ title: Travel plan — research, search, assess, vote/approve, book, confirm
 
 spec:
 
+  ## --- CBR -------------------------------------------------------------------------
+  cbr:
+    features:
+      destination: ".request.destination"
+      travelType: ".request.travelType"
+      season: ".request.season"
+      budget: ".request.budget"
+      durationDays: ".request.durationDays"
+      partySize: ".request.partySize"
+    weights:
+      destination: 3.0
+      travelType: 2.0
+      budget: 1.5
+      season: 1.0
+      durationDays: 0.5
+      partySize: 0.5
+    topK: 5
+    minSimilarity: 0.3
+    domain: casehubio/life/travel
+    caseType: travel-plan
+    timing: case-lifetime
+
   ## --- Capabilities ---------------------------------------------------------------
   capabilities:
     - name: destination-research
