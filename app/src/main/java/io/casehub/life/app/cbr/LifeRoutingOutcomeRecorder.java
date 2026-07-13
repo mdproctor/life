@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import io.casehub.neocortex.memory.cbr.FeatureValue;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -79,7 +80,7 @@ public class LifeRoutingOutcomeRecorder implements RoutingOutcomeRecorder {
                 return null;
             }
 
-            Map<String, Object> features = extractFeatures(jq, context.caseContext());
+            Map<String, Object> rawFeatures = extractFeatures(jq, context.caseContext());
             Map<String, Object> caseData = MAPPER.convertValue(context.caseContext(), MAP_TYPE);
 
             PlanTrace trace = new PlanTrace(
@@ -91,7 +92,7 @@ public class LifeRoutingOutcomeRecorder implements RoutingOutcomeRecorder {
                     descProvider.describeSolution(caseData),
                     outcome.name(),
                     null,
-                    features,
+                    FeatureValue.toFeatureMap(rawFeatures),
                     List.of(trace));
 
             cbrStore.store(

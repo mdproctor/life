@@ -19,6 +19,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
 import java.util.List;
+import io.casehub.neocortex.memory.cbr.FeatureValue;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -70,7 +71,7 @@ class LifeCaseOutcomeCbrWriterTest {
                 "contractorRequest", Map.of("problemType", "boiler-repair", "budget", 500, "contractorId", "ext-123"));
 
         var event = new CaseOutcomeEvent(
-                "contractor-coordination", UUID.randomUUID(),
+                "contractor-coordination", "test-tenant", UUID.randomUUID(),
                 snapshot, "COMPLETED", Instant.now(), Map.of());
 
         writer.onOutcome(event);
@@ -86,8 +87,8 @@ class LifeCaseOutcomeCbrWriterTest {
 
         PlanCbrCase stored = caseCaptor.getValue();
         assertThat(stored.outcome()).isEqualTo("COMPLETED");
-        assertThat(stored.features()).containsEntry("problemType", "boiler-repair");
-        assertThat(stored.features()).containsEntry("budget", 500);
+        assertThat(stored.features()).containsEntry("problemType", FeatureValue.string("boiler-repair"));
+        assertThat(stored.features()).containsEntry("budget", FeatureValue.number(500));
         assertThat(stored.planTrace()).isEmpty();
         assertThat(stored.problem()).contains("boiler-repair");
     }
@@ -95,7 +96,7 @@ class LifeCaseOutcomeCbrWriterTest {
     @Test
     void onOutcome_nonLifeCase_skips() {
         var event = new CaseOutcomeEvent(
-                "unknown-type", UUID.randomUUID(),
+                "unknown-type", "test-tenant", UUID.randomUUID(),
                 Map.of(), "COMPLETED", Instant.now(), Map.of());
         writer.onOutcome(event);
         verifyNoInteractions(cbrStore);
@@ -105,7 +106,7 @@ class LifeCaseOutcomeCbrWriterTest {
     void onOutcome_noDefinition_skips() {
         when(registry.findByName("contractor-coordination")).thenReturn(Optional.empty());
         var event = new CaseOutcomeEvent(
-                "contractor-coordination", UUID.randomUUID(),
+                "contractor-coordination", "test-tenant", UUID.randomUUID(),
                 Map.of(), "COMPLETED", Instant.now(), Map.of());
         writer.onOutcome(event);
         verifyNoInteractions(cbrStore);
@@ -117,7 +118,7 @@ class LifeCaseOutcomeCbrWriterTest {
         when(definition.getCbrConfig()).thenReturn(null);
         when(registry.findByName("contractor-coordination")).thenReturn(Optional.of(definition));
         var event = new CaseOutcomeEvent(
-                "contractor-coordination", UUID.randomUUID(),
+                "contractor-coordination", "test-tenant", UUID.randomUUID(),
                 Map.of(), "COMPLETED", Instant.now(), Map.of());
         writer.onOutcome(event);
         verifyNoInteractions(cbrStore);
@@ -133,7 +134,7 @@ class LifeCaseOutcomeCbrWriterTest {
         when(definition.getCbrConfig()).thenReturn(config);
         when(registry.findByName("contractor-coordination")).thenReturn(Optional.of(definition));
         var event = new CaseOutcomeEvent(
-                "contractor-coordination", UUID.randomUUID(),
+                "contractor-coordination", "test-tenant", UUID.randomUUID(),
                 Map.of(), "COMPLETED", Instant.now(), Map.of());
         writer.onOutcome(event);
         verifyNoInteractions(cbrStore);
@@ -156,7 +157,7 @@ class LifeCaseOutcomeCbrWriterTest {
                 .thenThrow(new RuntimeException("store failure"));
 
         var event = new CaseOutcomeEvent(
-                "contractor-coordination", UUID.randomUUID(),
+                "contractor-coordination", "test-tenant", UUID.randomUUID(),
                 Map.of("contractorRequest", Map.of("problemType", "boiler-repair")),
                 "COMPLETED", Instant.now(), Map.of());
 
@@ -178,7 +179,7 @@ class LifeCaseOutcomeCbrWriterTest {
                 .thenReturn(ValidationResult.ok(List.of(MAPPER.valueToTree("roof-leak"))));
 
         var event = new CaseOutcomeEvent(
-                "contractor-coordination", UUID.randomUUID(),
+                "contractor-coordination", "test-tenant", UUID.randomUUID(),
                 Map.of("contractorRequest", Map.of("problemType", "roof-leak")),
                 "FAULTED", Instant.now(), Map.of());
 

@@ -41,7 +41,7 @@ class LifeProvisionerCleanupObserverTest {
     @ValueSource(strings = {"CaseCompleted", "CaseFaulted", "CaseCancelled"})
     void terminatesOnTerminalEvents(String eventType) {
         UUID caseId = UUID.randomUUID();
-        CaseLifecycleEvent event = new CaseLifecycleEvent(
+        CaseLifecycleEvent event = CaseLifecycleEvent.of(
                 caseId, "test-tenant", "command", eventType,
                 "COMPLETED", null, "System", null);
 
@@ -54,7 +54,7 @@ class LifeProvisionerCleanupObserverTest {
     @ValueSource(strings = {"CaseStarted", "CaseSuspended", "CaseResumed", "WorkSubmitted"})
     void ignoresNonTerminalEvents(String eventType) {
         UUID caseId = UUID.randomUUID();
-        CaseLifecycleEvent event = new CaseLifecycleEvent(
+        CaseLifecycleEvent event = CaseLifecycleEvent.of(
                 caseId, "test-tenant", "command", eventType,
                 "ACTIVE", null, "System", null);
 

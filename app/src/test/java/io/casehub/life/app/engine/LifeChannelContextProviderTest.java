@@ -125,11 +125,11 @@ class LifeChannelContextProviderTest {
 
     private static Channel channelWithId(UUID id) {
         return new Channel(id, "test", null, null, null, null, null,
-                null, null, null, null, false, false, null, null, null);
+                null, null, null, null, false, false, null, null, null, null);
     }
 
     private static Message message(String sender, MessageType type, String content, Instant createdAt) {
         return new Message(1L, UUID.randomUUID(), sender, type, ActorType.AGENT,
-                "test-tenant", content, null, null, 0, null, null, null, null, null, 0, createdAt);
+                "test-tenant", content, null, null, 0, null, null, null, null, null, null, 0, createdAt);
     }
 }

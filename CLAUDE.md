@@ -425,6 +425,9 @@ api/    — pure Java: LifeDomain enum, ExternalActor request/response records,
           CreateLifeTaskRequest, LifeTaskResponse, CommitmentMode/CommitmentStatus/
           CommitmentOutcome/CommitmentRequest/OversightGateRequest (Layer 3),
           LifeActorIds (Layer 6), capability tag constants, trust dimension constants.
+          PagedResponse<T> (generic pagination), Urgency enum (deadline classification),
+          PendingActionResponse, CaseStatisticsResponse, SlaComplianceResponse,
+          TrustAnalyticsResponse, TrustHistoryEntry, ActorActivityEntry.
           Zero framework imports. No JPA.
 
 app/    — Quarkus: JPA entities (ExternalActor, LifeTaskContext, LifeCommitmentRecord,
@@ -442,6 +445,9 @@ app/    — Quarkus: JPA entities (ExternalActor, LifeTaskContext, LifeCommitmen
           ledger join table migrations at db/life/ledger/migration/ (V2100+).
           cbr (io.casehub.life.app.cbr — LifeCaseOutcomeCbrWriter, LifeRoutingOutcomeRecorder,
           LifeCbrFeatureSchemaRegistrar, LifeCbrDescriptionProvider + 6 impls in cbr/describe/).
+          read-side API (io.casehub.life.app.service — ExternalActorHistoryService,
+          PendingActionsService, LifeAnalyticsService; io.casehub.life.app.resource —
+          PendingActionsResource, LifeAnalyticsResource).
 ```
 
 ---

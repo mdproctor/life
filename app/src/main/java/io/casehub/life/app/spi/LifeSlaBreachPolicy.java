@@ -10,6 +10,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped
 public class LifeSlaBreachPolicy implements SlaBreachPolicy {
+    @Override
+    public String id() {
+        return "life-sla-breach";
+    }
+
 
     @Override
     public BreachDecision onBreach(final SlaBreachContext ctx) {

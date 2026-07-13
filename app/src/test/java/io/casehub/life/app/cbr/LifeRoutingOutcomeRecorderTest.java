@@ -19,6 +19,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.time.Duration;
 import java.util.List;
+import io.casehub.neocortex.memory.cbr.FeatureValue;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -90,7 +91,7 @@ class LifeRoutingOutcomeRecorderTest {
 
         PlanCbrCase stored = caseCaptor.getValue();
         assertThat(stored.outcome()).isEqualTo("SUCCESS");
-        assertThat(stored.features()).containsEntry("problemType", "boiler-repair");
+        assertThat(stored.features()).containsEntry("problemType", FeatureValue.string("boiler-repair"));
         assertThat(stored.planTrace()).hasSize(1);
         assertThat(stored.planTrace().get(0).bindingName()).isEqualTo("request-quote");
         assertThat(stored.planTrace().get(0).capabilityName()).isEqualTo("request-quote");

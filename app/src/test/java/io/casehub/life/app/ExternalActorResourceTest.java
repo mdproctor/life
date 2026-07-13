@@ -81,7 +81,7 @@ class ExternalActorResourceTest {
                 .when().get("/external-actors")
                 .then()
                 .statusCode(200)
-                .body("findAll { it.actorType == 'AI_AGENT' }.size()", greaterThanOrEqualTo(1));
+                .body("items.findAll { it.actorType == 'AI_AGENT' }.size()", greaterThanOrEqualTo(1));
     }
 
     @Test

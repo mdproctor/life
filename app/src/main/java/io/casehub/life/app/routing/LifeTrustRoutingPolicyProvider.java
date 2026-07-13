@@ -17,6 +17,7 @@ import jakarta.inject.Inject;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 @ApplicationScoped
 public class LifeTrustRoutingPolicyProvider implements TrustRoutingPolicyProvider {
@@ -74,6 +75,7 @@ public class LifeTrustRoutingPolicyProvider implements TrustRoutingPolicyProvide
 
         return new TrustRoutingPolicy(threshold, minObs, margin, blendFactor,
                 Map.copyOf(qualityFloors), false,
-                TrustRoutingPolicy.DEFAULT.fallbackBinding());
+                TrustRoutingPolicy.DEFAULT.fallbackBinding(), Set.of(),
+                TrustRoutingPolicy.DEFAULT.cbrWeight());
     }
 }

@@ -20,6 +20,7 @@ import org.jboss.logging.Logger;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import io.casehub.neocortex.memory.cbr.FeatureValue;
 import java.util.Map;
 
 @ApplicationScoped
@@ -64,14 +65,14 @@ public class LifeCaseOutcomeCbrWriter implements CaseOutcomeObserver {
             }
 
             JsonNode jsonNode = MAPPER.valueToTree(event.caseFileSnapshot());
-            Map<String, Object> features = extractFeatures(jq, jsonNode);
+            Map<String, Object> rawFeatures = extractFeatures(jq, jsonNode);
 
             PlanCbrCase cbrCase = new PlanCbrCase(
                     descProvider.describeProblem(event.caseFileSnapshot()),
                     descProvider.describeSolution(event.caseFileSnapshot()),
                     event.outcomeLabel(),
                     null,
-                    features,
+                    FeatureValue.toFeatureMap(rawFeatures),
                     List.of());
 
             cbrStore.store(

@@ -7,6 +7,8 @@ import io.casehub.life.api.request.UpdateExternalActorRequest;
 import io.casehub.life.api.response.ErasureResponse;
 import io.casehub.life.api.response.ExternalActorResponse;
 import io.casehub.life.api.response.LifeTaskContextResponse;
+import io.casehub.life.api.response.PagedResponse;
+import io.casehub.life.app.service.ExternalActorHistoryService;
 import io.casehub.life.app.service.ExternalActorService;
 import io.casehub.life.app.service.LifeGdprErasureService;
 import io.casehub.platform.api.identity.CurrentPrincipal;
@@ -17,6 +19,7 @@ import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
@@ -46,6 +49,8 @@ public class ExternalActorResource {
 
     @Inject
     CurrentPrincipal currentPrincipal;
+    @Inject
+    ExternalActorHistoryService historyService;
 
     @POST
     @RolesAllowed({HouseholdGroups.ADMIN, HouseholdGroups.MEMBER})
@@ -57,18 +62,24 @@ public class ExternalActorResource {
     }
 
     @GET
-    @RolesAllowed({HouseholdGroups.ADMIN, HouseholdGroups.MEMBER})
-    public List<ExternalActorResponse> list(@QueryParam("actorType") final LifeActorType actorType) {
-        return service.list(actorType);
+    @RolesAllowed({HouseholdGroups.ADMIN, HouseholdGroups.MEMBER, HouseholdGroups.JUNIOR})
+    public PagedResponse<ExternalActorResponse> list(
+            @QueryParam("actorType") final LifeActorType actorType,
+            @QueryParam("name") final String name,
+            @QueryParam("contactMethod") final String contactMethod,
+            @QueryParam("erasedOnly") @DefaultValue("false") final boolean erasedOnly,
+            @QueryParam("page") @DefaultValue("0") final int page,
+            @QueryParam("size") @DefaultValue("20") final int size) {
+        return service.search(name, actorType, contactMethod, erasedOnly, page, size);
     }
 
     @GET
     @Path("/{id}")
-    @RolesAllowed({HouseholdGroups.ADMIN, HouseholdGroups.MEMBER})
+    @RolesAllowed({HouseholdGroups.ADMIN, HouseholdGroups.MEMBER, HouseholdGroups.JUNIOR})
     public Response get(@PathParam("id") final UUID id) {
         return service.findById(id)
-                .map(a -> Response.ok(a).build())
-                .orElse(Response.status(Response.Status.NOT_FOUND).build());
+                      .map(a -> Response.ok(a).build())
+                      .orElse(Response.status(Response.Status.NOT_FOUND).build());
     }
 
     @PUT
@@ -106,4 +117,32 @@ public class ExternalActorResource {
         final List<LifeTaskContextResponse> tasks = service.listTasks(id);
         return Response.ok(tasks).build();
     }
+
+    @GET
+    @Path("/{id}/trust-history")
+    @RolesAllowed({HouseholdGroups.ADMIN, HouseholdGroups.MEMBER, HouseholdGroups.JUNIOR})
+    public Response trustHistory(
+            @PathParam("id") final UUID id,
+            @QueryParam("page") @DefaultValue("0") final int page,
+            @QueryParam("size") @DefaultValue("20") final int size) {
+        if (!historyService.actorExists(id)) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        return Response.ok(historyService.trustHistory(id, page, size)).build();
+    }
+
+    @GET
+    @Path("/{id}/activity")
+    @RolesAllowed({HouseholdGroups.ADMIN, HouseholdGroups.MEMBER, HouseholdGroups.JUNIOR})
+    public Response activityTimeline(
+            @PathParam("id") final UUID id,
+            @QueryParam("page") @DefaultValue("0") final int page,
+            @QueryParam("size") @DefaultValue("20") final int size) {
+        if (!historyService.actorExists(id)) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        return Response.ok(historyService.activityTimeline(id, page, size)).build();
+    }
+
+
 }

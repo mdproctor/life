@@ -16,6 +16,10 @@ import jakarta.ws.rs.ClientErrorException;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.core.Response;
 
+import io.casehub.life.api.response.PagedResponse;
+import io.quarkus.panache.common.Page;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -42,11 +46,40 @@ public class ExternalActorService {
         return ExternalActor.<ExternalActor>findByIdOptional(id).map(this::toResponse);
     }
 
-    public List<ExternalActorResponse> list(final LifeActorType actorType) {
-        List<ExternalActor> actors = actorType != null
-                ? ExternalActor.list("actorType", actorType)
-                : ExternalActor.listAll();
-        return actors.stream().map(this::toResponse).toList();
+    @Transactional
+    public PagedResponse<ExternalActorResponse> search(
+            final String name, final LifeActorType actorType, final String contactMethod,
+            final boolean erasedOnly, int page, int size) {
+        page = Math.max(page, 0);
+        size = Math.max(Math.min(size, 100), 1);
+        var params     = new HashMap<String, Object>();
+        var conditions = new ArrayList<String>();
+
+        if (name != null && !name.isBlank()) {
+            conditions.add("LOWER(name) LIKE LOWER(:name)");
+            params.put("name", "%" + name + "%");
+        }
+        if (actorType != null) {
+            conditions.add("actorType = :actorType");
+            params.put("actorType", actorType);
+        }
+        if (contactMethod != null && !contactMethod.isBlank()) {
+            conditions.add("contactMethod = :contactMethod");
+            params.put("contactMethod", contactMethod);
+        }
+        if (erasedOnly) {
+            conditions.add("gdprErasedAt IS NOT NULL");
+        }
+
+        String query = conditions.isEmpty() ? "" : String.join(" AND ", conditions);
+        var panacheQuery = query.isEmpty()
+                           ? ExternalActor.<ExternalActor>findAll()
+                           : ExternalActor.<ExternalActor>find(query, params);
+
+        long                        total  = panacheQuery.count();
+        List<ExternalActor>         actors = panacheQuery.page(Page.of(page, size)).list();
+        List<ExternalActorResponse> items  = actors.stream().map(this::toResponse).toList();
+        return new PagedResponse<>(items, page, size, total);
     }
 
     @Transactional
