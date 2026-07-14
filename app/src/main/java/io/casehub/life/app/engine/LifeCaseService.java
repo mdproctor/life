@@ -17,10 +17,12 @@ package io.casehub.life.app.engine;
 
 import io.casehub.api.engine.CaseHub;
 import io.casehub.api.engine.CaseHubRuntime;
+import io.casehub.life.api.CbrSuggestions;
 import io.casehub.life.api.LifeCaseStatus;
 import io.casehub.life.api.LifeCaseType;
 import io.casehub.life.api.request.CreateLifeCaseRequest;
 import io.casehub.life.api.response.LifeCaseResponse;
+import io.casehub.life.app.cbr.LifeCbrSuggestionService;
 import io.casehub.life.app.entity.LifeCaseTracker;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
@@ -52,6 +54,11 @@ public class LifeCaseService {
 
     @Inject @Any Instance<LifeTypedCaseHub> caseHubs;
     @Inject CaseHubRuntime caseHubRuntime;
+    @Inject
+            LifeCbrSuggestionService cbrSuggestionService;
+    @Inject
+    com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
 
     public LifeCaseResponse startCase(CreateLifeCaseRequest request) {
         UUID trackerId = UUID.randomUUID();
@@ -59,9 +66,18 @@ public class LifeCaseService {
             // Phase 1: @Transactional - validate, track, build context
             Map<String, Object> initialContext = prepareAndTrack(trackerId, request);
 
+            // CBR enrichment: between phases, no transaction held.
+            // suggest() handles its own errors — returns EMPTY on failure.
+            CbrSuggestions suggestions = cbrSuggestionService.suggest(
+                    request.caseType(), initialContext);
+            if (!suggestions.isEmpty()) {
+                initialContext.put("cbrCalibration",
+                                   objectMapper.convertValue(suggestions, Map.class));
+            }
+
             // Phase 2: no transaction - start the case and wait for caseId
             CaseHub caseHub = resolve(request.caseType());
-            UUID caseId = caseHub.startCase(initialContext).toCompletableFuture().join();
+            UUID    caseId  = caseHub.startCase(initialContext).toCompletableFuture().join();
 
             // Phase 3: @Transactional - persist caseId, signal into context
             persistCaseId(trackerId, caseId);
@@ -76,8 +92,7 @@ public class LifeCaseService {
                 LOG.errorf(mfe, "markFailed also failed for tracker=%s", trackerId);
             }
             throw new RuntimeException("Case start failed: " + e.getMessage(), e);
-        }
-    }
+        }}
 
     @Transactional
     Map<String, Object> prepareAndTrack(UUID trackerId, CreateLifeCaseRequest request) {

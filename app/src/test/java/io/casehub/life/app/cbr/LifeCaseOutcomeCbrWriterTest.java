@@ -2,52 +2,50 @@ package io.casehub.life.app.cbr;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.casehub.api.model.CaseDefinition;
 import io.casehub.api.model.cbr.CbrConfig;
 import io.casehub.api.spi.CaseOutcomeEvent;
-import io.casehub.engine.common.spi.CaseDefinitionRegistry;
 import io.casehub.life.app.cbr.describe.ContractorCoordinationDescriptionProvider;
 import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.FeatureValue;
 import io.casehub.neocortex.memory.cbr.PlanCbrCase;
-import io.casehub.platform.expression.JQEvaluator;
-import io.casehub.platform.expression.ValidationResult;
 import jakarta.enterprise.inject.Instance;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
-import java.util.List;
-import io.casehub.neocortex.memory.cbr.FeatureValue;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 class LifeCaseOutcomeCbrWriterTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private CbrCaseMemoryStore cbrStore;
-    private CaseDefinitionRegistry registry;
-    private JQEvaluator jqEvaluator;
+    private LifeCbrFeatureExtractor featureExtractor;
     private LifeCaseOutcomeCbrWriter writer;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
         cbrStore = mock(CbrCaseMemoryStore.class);
-        registry = mock(CaseDefinitionRegistry.class);
-        jqEvaluator = mock(JQEvaluator.class);
+        featureExtractor = mock(LifeCbrFeatureExtractor.class);
 
         var descProvider = new ContractorCoordinationDescriptionProvider();
         Instance<LifeCbrDescriptionProvider> providers = mock(Instance.class);
         when(providers.stream()).thenReturn(java.util.stream.Stream.of(descProvider));
 
-        writer = new LifeCaseOutcomeCbrWriter(cbrStore, registry, jqEvaluator, providers);
+        writer = new LifeCaseOutcomeCbrWriter(cbrStore, featureExtractor, providers);
     }
 
     @Test
@@ -58,14 +56,10 @@ class LifeCaseOutcomeCbrWriterTest {
                 .domain("casehubio/life/contractor")
                 .caseType("contractor-coordination")
                 .build();
-        var definition = mock(CaseDefinition.class);
-        when(definition.getCbrConfig()).thenReturn(config);
-        when(registry.findByName("contractor-coordination")).thenReturn(Optional.of(definition));
-
-        when(jqEvaluator.eval(eq(".contractorRequest.problemType"), any(JsonNode.class)))
-                .thenReturn(ValidationResult.ok(List.of(MAPPER.valueToTree("boiler-repair"))));
-        when(jqEvaluator.eval(eq(".contractorRequest.budget"), any(JsonNode.class)))
-                .thenReturn(ValidationResult.ok(List.of(MAPPER.valueToTree(500))));
+        when(featureExtractor.extract(eq("contractor-coordination"), any(JsonNode.class)))
+                .thenReturn(Optional.of(new LifeCbrFeatureExtractor.ExtractionResult(
+                        config, Map.of("problemType", FeatureValue.string("boiler-repair"),
+                                       "budget", FeatureValue.number(500)))));
 
         var snapshot = Map.<String, Object>of(
                 "contractorRequest", Map.of("problemType", "boiler-repair", "budget", 500, "contractorId", "ext-123"));
@@ -103,39 +97,13 @@ class LifeCaseOutcomeCbrWriterTest {
     }
 
     @Test
-    void onOutcome_noDefinition_skips() {
-        when(registry.findByName("contractor-coordination")).thenReturn(Optional.empty());
+    void onOutcome_extractionEmpty_skips() {
+        when(featureExtractor.extract(eq("contractor-coordination"), any(JsonNode.class)))
+                .thenReturn(Optional.empty());
         var event = new CaseOutcomeEvent(
                 "contractor-coordination", "test-tenant", UUID.randomUUID(),
-                Map.of(), "COMPLETED", Instant.now(), Map.of());
-        writer.onOutcome(event);
-        verifyNoInteractions(cbrStore);
-    }
-
-    @Test
-    void onOutcome_noCbrConfig_skips() {
-        var definition = mock(CaseDefinition.class);
-        when(definition.getCbrConfig()).thenReturn(null);
-        when(registry.findByName("contractor-coordination")).thenReturn(Optional.of(definition));
-        var event = new CaseOutcomeEvent(
-                "contractor-coordination", "test-tenant", UUID.randomUUID(),
-                Map.of(), "COMPLETED", Instant.now(), Map.of());
-        writer.onOutcome(event);
-        verifyNoInteractions(cbrStore);
-    }
-
-    @Test
-    void onOutcome_lambdaExtractor_skips() {
-        CbrConfig config = CbrConfig.builder()
-                .featureExtractor(ctx -> Map.of())
-                .domain("casehubio/life/contractor")
-                .build();
-        var definition = mock(CaseDefinition.class);
-        when(definition.getCbrConfig()).thenReturn(config);
-        when(registry.findByName("contractor-coordination")).thenReturn(Optional.of(definition));
-        var event = new CaseOutcomeEvent(
-                "contractor-coordination", "test-tenant", UUID.randomUUID(),
-                Map.of(), "COMPLETED", Instant.now(), Map.of());
+                Map.of("contractorRequest", Map.of("problemType", "test", "contractorId", "ext-1")),
+                "COMPLETED", Instant.now(), Map.of());
         writer.onOutcome(event);
         verifyNoInteractions(cbrStore);
     }
@@ -147,18 +115,15 @@ class LifeCaseOutcomeCbrWriterTest {
                 .domain("casehubio/life/contractor")
                 .caseType("contractor-coordination")
                 .build();
-        var definition = mock(CaseDefinition.class);
-        when(definition.getCbrConfig()).thenReturn(config);
-        when(registry.findByName("contractor-coordination")).thenReturn(Optional.of(definition));
-
-        when(jqEvaluator.eval(any(), any(JsonNode.class)))
-                .thenReturn(ValidationResult.ok(List.of(MAPPER.valueToTree("boiler-repair"))));
+        when(featureExtractor.extract(eq("contractor-coordination"), any(JsonNode.class)))
+                .thenReturn(Optional.of(new LifeCbrFeatureExtractor.ExtractionResult(
+                        config, Map.of("problemType", FeatureValue.string("boiler-repair")))));
         when(cbrStore.store(any(), any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("store failure"));
 
         var event = new CaseOutcomeEvent(
                 "contractor-coordination", "test-tenant", UUID.randomUUID(),
-                Map.of("contractorRequest", Map.of("problemType", "boiler-repair")),
+                Map.of("contractorRequest", Map.of("problemType", "boiler-repair", "contractorId", "ext-1")),
                 "COMPLETED", Instant.now(), Map.of());
 
         writer.onOutcome(event);
@@ -171,16 +136,13 @@ class LifeCaseOutcomeCbrWriterTest {
                 .domain("casehubio/life/contractor")
                 .caseType("contractor-coordination")
                 .build();
-        var definition = mock(CaseDefinition.class);
-        when(definition.getCbrConfig()).thenReturn(config);
-        when(registry.findByName("contractor-coordination")).thenReturn(Optional.of(definition));
-
-        when(jqEvaluator.eval(any(), any(JsonNode.class)))
-                .thenReturn(ValidationResult.ok(List.of(MAPPER.valueToTree("roof-leak"))));
+        when(featureExtractor.extract(eq("contractor-coordination"), any(JsonNode.class)))
+                .thenReturn(Optional.of(new LifeCbrFeatureExtractor.ExtractionResult(
+                        config, Map.of("problemType", FeatureValue.string("roof-leak")))));
 
         var event = new CaseOutcomeEvent(
                 "contractor-coordination", "test-tenant", UUID.randomUUID(),
-                Map.of("contractorRequest", Map.of("problemType", "roof-leak")),
+                Map.of("contractorRequest", Map.of("problemType", "roof-leak", "contractorId", "ext-1")),
                 "FAULTED", Instant.now(), Map.of());
 
         writer.onOutcome(event);

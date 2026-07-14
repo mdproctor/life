@@ -57,7 +57,9 @@ public class CareCoordinationCaseHub extends LifeTypedCaseHub {
                 determining care level, recommended frequency, and any special requirements.""", NeedsAssessmentResult.class));
         definition.getWorkers().add(agentWorker("care-plan", """
                 You are a care coordination agent. Create a care plan with schedule,
-                duration, and task list based on the needs assessment.""", CarePlanResult.class));
+                duration, and task list based on the needs assessment.
+                If cbrCalibration is provided, use featureStats for historical care
+                duration and frequency patterns.""", CarePlanResult.class));
         definition.getWorkers().add(agentWorker("health-check", """
                 You are a care coordination agent. Perform a periodic health check,
                 reviewing the patient's condition and flagging any concerns.""", HealthCheckResult.class));

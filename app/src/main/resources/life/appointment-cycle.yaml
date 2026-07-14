@@ -26,7 +26,7 @@ spec:
   capabilities:
     - name: book-appointment
       description: "Book an appointment with the specified provider"
-      inputSchema: "{ appointmentType: .appointmentType, provider: .provider }"
+      inputSchema: "{ appointmentType: .appointmentType, provider: .provider, cbrCalibration: .cbrCalibration }"
       outputSchema: "{ booking: . }"
 
     - name: find-alternative

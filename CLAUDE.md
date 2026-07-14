@@ -368,9 +368,24 @@ Note: `HouseholdTask`, `LifeGoal`, `LifeEvent` were removed in Layer 2 — they 
 - `casehub-neocortex-memory-api` + `casehub-neocortex-memory-cbr-inmem` (test) — Maven dependencies.
   `InMemoryCbrCaseMemoryStore` (`@Alternative @Priority(2)`) in tests; `NoOpCbrCaseMemoryStore`
   (`@DefaultBean`) in production until Qdrant is configured.
-- Engine dependencies: engine#505 (routing strategy consumes experiences — OPEN),
-  engine#683 (RoutingPromptSection promotion — OPEN). Life data flows but has no behavioral
-  effect on routing until #505 lands.
+- Engine dependencies: ~~engine#505~~ CLOSED, ~~engine#683~~ CLOSED, ~~engine#707~~ CLOSED.
+  Routing consumes CBR experiences; experiences flow to worker execution.
+- `LifeCbrFeatureExtractor` — `app/cbr/` `@ApplicationScoped`; shared feature extraction
+  pipeline consolidating registry lookup → CbrConfig → JQ evaluation → FeatureValue map.
+  Used by retention writers and suggestion service.
+- `LifeCbrSuggestionService` — `app/cbr/` `@ApplicationScoped`; queries `CbrCaseMemoryStore`
+  at case start, computes `FeatureStatistics` (nearest-rank percentiles) per numeric feature,
+  returns `CbrSuggestions` with `historicalSuccessRate` and `averageSimilarity`.
+- `CbrSuggestions` + `FeatureStatistics` — `api/` records for structured calibration data.
+- `LifeCbrExperienceFormatter` — `app/cbr/` `@ApplicationScoped`; formats
+  `List<RetrievedExperience>` into structured prompt text for LLM consumption.
+- `CbrInputTransformer` — `app/cbr/` `UnaryOperator<JsonNode>`; reads
+  `WorkerExecutionContext.current().experiences()` at execution time, merges `_cbrContext`
+  into the Agent input. Registered on every Agent via `LifeTypedCaseHub.agentWorker()`.
+- `LifeCaseService.startCase()` — calls `suggest()` between Phase 1 and Phase 2,
+  writes `cbrCalibration` to initial case context.
+- 8 workers gain domain-specific CBR calibration instructions in system prompts.
+- 8 YAML capabilities gain `cbrCalibration` in `inputProjection`.
 
 **Capability tags:**
 - `household-management` — routine household coordination: grocery ordering, maintenance scheduling, contractor liaison
@@ -533,9 +548,13 @@ Layer 8: + casehub-neocortex (CBR) — Case-Based Reasoning for adaptive life au
          with CategoricalTable and GaussianDecay SimilaritySpecs (LifeCbrFeatureSchemaRegistrar).
          YAML spec.cbr on all 6 eligible case definitions with JQ feature extractors.
          LifeCbrDescriptionProvider (6 impls) for domain problem/solution/entityId extraction.
-         Engine dependencies: engine#505 (routing consumes experiences — OPEN),
-         engine#683 (RoutingPromptSection — OPEN).
-         ✅ COMPLETE (retention + retrieval config)  🔲 PENDING (routing effect — engine#505)
+         Engine dependencies: ~~engine#505~~ CLOSED, ~~engine#683~~ CLOSED, ~~engine#707~~ CLOSED.
+         CBR engine integration (#56): LifeCbrFeatureExtractor consolidates feature extraction.
+         LifeCbrSuggestionService queries CBR store at case start, writes cbrCalibration to context.
+         LifeCbrExperienceFormatter + CbrInputTransformer enrich every Agent with _cbrContext
+         via inputTransformer. 8 workers gain calibration instructions, 8 YAML inputProjections
+         gain cbrCalibration. CbrSuggestions/FeatureStatistics in api/.
+         ✅ COMPLETE (retention + retrieval + integration)  🔲 PENDING (#55 REVISE rules, #60 skill integration)
 ```
 
 ### Foundation Gates
@@ -550,8 +569,8 @@ Layer 8: + casehub-neocortex (CBR) — Case-Based Reasoning for adaptive life au
 | Adaptive CasePlanModel (travel, care) | engine P0 complete |
 | Trust-weighted agent routing | casehub-engine-ledger wired ✅; TrustRoutingPolicyProvider implemented; attestation pipeline active; single-candidate routing until Layer 7 |
 | OpenClaw as WorkerProvisioner | Pending — research spec 2026-05-25 |
-| CBR retention + retrieval config | casehub-neocortex-memory-api ✅; CaseOutcomeObserver ✅; RoutingOutcomeRecorder ✅; CbrRetrievalService ✅ |
-| CBR-informed routing | engine#505 OPEN — routing strategy ignores experiences until this lands |
+| CBR retention + retrieval + integration | casehub-neocortex-memory-api ✅; CaseOutcomeObserver ✅; RoutingOutcomeRecorder ✅; CbrRetrievalService ✅; LifeCbrSuggestionService ✅; CbrInputTransformer ✅ |
+| CBR-informed routing | engine#505 CLOSED ✅ — routing consumes CBR experiences; engine#707 CLOSED ✅ — experiences flow to workers |
 
 ---
 

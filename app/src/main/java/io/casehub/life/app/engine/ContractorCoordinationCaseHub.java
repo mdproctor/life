@@ -58,7 +58,9 @@ public class ContractorCoordinationCaseHub extends LifeTypedCaseHub {
     protected void configureCase(CaseDefinition definition) {
         definition.getWorkers().add(agentWorker("request-quote", """
                 You are a contractor coordination agent. Request a quote from the
-                contractor via the appropriate messaging channel.""", RequestQuoteResult.class));
+                contractor via the appropriate messaging channel.
+                If cbrCalibration is provided, use featureStats.estimatedCost for
+                typical cost ranges in similar jobs.""", RequestQuoteResult.class));
         definition.getWorkers().add(agentWorker("watchdog-escalation", """
                 You are a contractor coordination agent. Escalate an overdue
                 contractor commitment by sending a reminder.""", WatchdogEscalationResult.class));

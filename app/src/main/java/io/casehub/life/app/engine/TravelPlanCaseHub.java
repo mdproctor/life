@@ -72,10 +72,14 @@ public class TravelPlanCaseHub extends LifeTypedCaseHub {
                 price, and rating.""", HotelSearchResult.class));
         definition.getWorkers().add(agentWorker("budget-assessment", """
                 You are a travel planning agent. Assess the total travel budget
-                and determine if approval is required.""", BudgetAssessmentResult.class));
+                and determine if approval is required.
+                If cbrCalibration is provided, use featureStats.budget for typical cost
+                ranges and historicalSuccessRate to gauge risk.""", BudgetAssessmentResult.class));
         definition.getWorkers().add(agentWorker("booking", """
                 You are a travel planning agent. Book the selected flights and hotels.
-                If booking fails, set declined=true with a reason.""", TravelBookingResult.class));
+                If booking fails, set declined=true with a reason.
+                If cbrCalibration is provided, use historicalSuccessRate to inform
+                booking confidence.""", TravelBookingResult.class));
         definition.getWorkers().add(agentWorker("rebooking", """
                 You are a travel planning agent. Rebook after a declined booking,
                 finding alternative dates.""", RebookingResult.class));

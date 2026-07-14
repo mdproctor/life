@@ -111,6 +111,8 @@ class LifeTypedCaseHubTest {
         var hub = new TestCaseHub();
         hub.openClawFactory = mockFactory;
         hub.descriptorFactory = mockDescriptorFactory;
+        hub.cbrFormatter = new io.casehub.life.app.cbr.LifeCbrExperienceFormatter();
+        hub.initCbrTransformer();
         return hub;
     }
 
@@ -118,6 +120,8 @@ class LifeTypedCaseHubTest {
         var hub = new TestCaseHubWithWorker();
         hub.openClawFactory = mockFactory;
         hub.descriptorFactory = mockDescriptorFactory;
+        hub.cbrFormatter = new io.casehub.life.app.cbr.LifeCbrExperienceFormatter();
+        hub.initCbrTransformer();
         return hub;
     }
 

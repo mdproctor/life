@@ -2,16 +2,13 @@ package io.casehub.life.app.cbr;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.NullNode;
-import io.casehub.api.model.CaseDefinition;
 import io.casehub.api.model.cbr.CbrConfig;
 import io.casehub.api.spi.routing.AgentRoutingContext;
 import io.casehub.api.spi.routing.RoutingOutcome;
-import io.casehub.engine.common.spi.CaseDefinitionRegistry;
 import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.FeatureValue;
 import io.casehub.neocortex.memory.cbr.PlanCbrCase;
-import io.casehub.platform.expression.JQEvaluator;
-import io.casehub.platform.expression.ValidationResult;
 import jakarta.enterprise.inject.Instance;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,21 +16,24 @@ import org.mockito.ArgumentCaptor;
 
 import java.time.Duration;
 import java.util.List;
-import io.casehub.neocortex.memory.cbr.FeatureValue;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 class LifeRoutingOutcomeRecorderTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private CbrCaseMemoryStore cbrStore;
-    private CaseDefinitionRegistry registry;
-    private JQEvaluator jqEvaluator;
+    private LifeCbrFeatureExtractor featureExtractor;
     private LifeRoutingOutcomeRecorder.CaseTypeLookup caseTypeLookup;
     private LifeRoutingOutcomeRecorder recorder;
 
@@ -41,8 +41,7 @@ class LifeRoutingOutcomeRecorderTest {
     @SuppressWarnings("unchecked")
     void setUp() {
         cbrStore = mock(CbrCaseMemoryStore.class);
-        registry = mock(CaseDefinitionRegistry.class);
-        jqEvaluator = mock(JQEvaluator.class);
+        featureExtractor = mock(LifeCbrFeatureExtractor.class);
         caseTypeLookup = mock(LifeRoutingOutcomeRecorder.CaseTypeLookup.class);
 
         var descProvider = new io.casehub.life.app.cbr.describe
@@ -51,7 +50,7 @@ class LifeRoutingOutcomeRecorderTest {
         when(providers.stream()).thenReturn(java.util.stream.Stream.of(descProvider));
 
         recorder = new LifeRoutingOutcomeRecorder(
-                cbrStore, registry, jqEvaluator, caseTypeLookup, providers);
+                cbrStore, featureExtractor, caseTypeLookup, providers);
     }
 
     @Test
@@ -64,14 +63,11 @@ class LifeRoutingOutcomeRecorderTest {
                 .domain("casehubio/life/contractor")
                 .caseType("contractor-coordination")
                 .build();
-        var definition = mock(CaseDefinition.class);
-        when(definition.getCbrConfig()).thenReturn(config);
-        when(registry.findByName("contractor-coordination")).thenReturn(Optional.of(definition));
-
         var contextJson = MAPPER.valueToTree(Map.of(
                 "contractorRequest", Map.of("problemType", "boiler-repair")));
-        when(jqEvaluator.eval(eq(".contractorRequest.problemType"), any()))
-                .thenReturn(ValidationResult.ok(List.of(MAPPER.valueToTree("boiler-repair"))));
+        when(featureExtractor.extract(eq("contractor-coordination"), eq(contextJson)))
+                .thenReturn(Optional.of(new LifeCbrFeatureExtractor.ExtractionResult(
+                        config, Map.of("problemType", FeatureValue.string("boiler-repair")))));
 
         var context = new AgentRoutingContext(
                 caseId, "request-quote", contextJson, "test-tenant", List.of());
@@ -114,13 +110,11 @@ class LifeRoutingOutcomeRecorderTest {
     }
 
     @Test
-    void record_noCbrConfig_skips() {
+    void record_extractionEmpty_skips() {
         UUID caseId = UUID.randomUUID();
         when(caseTypeLookup.findCaseType(caseId)).thenReturn(Optional.of("contractor-coordination"));
-
-        var definition = mock(CaseDefinition.class);
-        when(definition.getCbrConfig()).thenReturn(null);
-        when(registry.findByName("contractor-coordination")).thenReturn(Optional.of(definition));
+        when(featureExtractor.extract(eq("contractor-coordination"), any()))
+                .thenReturn(Optional.empty());
 
         var context = new AgentRoutingContext(
                 caseId, "cap", NullNode.getInstance(), "test-tenant", List.of());
@@ -141,15 +135,13 @@ class LifeRoutingOutcomeRecorderTest {
                 .domain("casehubio/life/contractor")
                 .caseType("contractor-coordination")
                 .build();
-        var definition = mock(CaseDefinition.class);
-        when(definition.getCbrConfig()).thenReturn(config);
-        when(registry.findByName("contractor-coordination")).thenReturn(Optional.of(definition));
-        when(jqEvaluator.eval(any(), any()))
-                .thenReturn(ValidationResult.ok(List.of(MAPPER.valueToTree("x"))));
+        var contextJson = MAPPER.valueToTree(Map.of("contractorRequest", Map.of("problemType", "x")));
+        when(featureExtractor.extract(eq("contractor-coordination"), eq(contextJson)))
+                .thenReturn(Optional.of(new LifeCbrFeatureExtractor.ExtractionResult(
+                        config, Map.of("problemType", FeatureValue.string("x")))));
         when(cbrStore.store(any(), any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("boom"));
 
-        var contextJson = MAPPER.valueToTree(Map.of("contractorRequest", Map.of("problemType", "x")));
         var context = new AgentRoutingContext(
                 caseId, "cap", contextJson, "test-tenant", List.of());
 
@@ -167,13 +159,11 @@ class LifeRoutingOutcomeRecorderTest {
                 .domain("casehubio/life/contractor")
                 .caseType("contractor-coordination")
                 .build();
-        var definition = mock(CaseDefinition.class);
-        when(definition.getCbrConfig()).thenReturn(config);
-        when(registry.findByName("contractor-coordination")).thenReturn(Optional.of(definition));
-        when(jqEvaluator.eval(any(), any()))
-                .thenReturn(ValidationResult.ok(List.of(MAPPER.valueToTree("y"))));
-
         var contextJson = MAPPER.valueToTree(Map.of("contractorRequest", Map.of("problemType", "y")));
+        when(featureExtractor.extract(eq("contractor-coordination"), eq(contextJson)))
+                .thenReturn(Optional.of(new LifeCbrFeatureExtractor.ExtractionResult(
+                        config, Map.of("problemType", FeatureValue.string("y")))));
+
         var context = new AgentRoutingContext(
                 caseId, "cap", contextJson, "test-tenant", List.of());
 

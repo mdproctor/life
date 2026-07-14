@@ -30,12 +30,12 @@ spec:
   capabilities:
     - name: schedule-inspection
       description: "Schedule and perform a home inspection"
-      inputSchema: "{ request: .request }"
+      inputSchema: "{ request: .request, cbrCalibration: .cbrCalibration }"
       outputSchema: "{ inspection: . }"
 
     - name: get-quotes
       description: "Obtain contractor quotes based on inspection results"
-      inputSchema: "{ inspection: .inspection }"
+      inputSchema: "{ inspection: .inspection, cbrCalibration: .cbrCalibration }"
       outputSchema: "{ quotes: . }"
 
     - name: issue-commitment

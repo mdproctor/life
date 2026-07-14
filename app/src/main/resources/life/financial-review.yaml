@@ -33,7 +33,7 @@ spec:
 
     - name: analyse-anomalies
       description: "Analyse budget data for anomalies and flag issues"
-      inputSchema: "{ budgetData: .budgetData }"
+      inputSchema: "{ budgetData: .budgetData, cbrCalibration: .cbrCalibration }"
       outputSchema: "{ analysis: . }"
 
     - name: escalate-anomalies

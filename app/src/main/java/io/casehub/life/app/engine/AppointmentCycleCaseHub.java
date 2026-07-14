@@ -83,13 +83,14 @@ public class AppointmentCycleCaseHub extends LifeTypedCaseHub {
     private Worker bookAppointmentWorker() {
         final Agent bookingAgent = Agent.builder()
                 .model(openClawFactory.forAgent(agent()))
-                .systemPrompt("""
-                        You are a healthcare appointment booking agent for a UK household.
-                        Book medical appointments with the requested provider.
-                        If the provider is unavailable, set declined=true and provide a reason.
-                        Respond with valid JSON only — no prose, no explanation.
-                        """)
+                .systemPrompt("You are a healthcare appointment booking agent for a UK household. " +
+                        "Book medical appointments with the requested provider. " +
+                        "If the provider is unavailable, set declined=true and provide a reason. " +
+                        "If cbrCalibration is provided, use historicalSuccessRate to inform " +
+                        "booking confidence and featureStats for appointment patterns. " +
+                        "Respond with valid JSON only — no prose, no explanation. " + CBR_SYSTEM_PROMPT_SUFFIX)
                 .userMessage("Book a {{appointmentType}} appointment with provider {{provider}}.")
+                .inputTransformer(cbrInputTransformer)
                 .responseSchema(BookingResult.class)
                 .build();
 

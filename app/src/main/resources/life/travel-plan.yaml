@@ -47,12 +47,12 @@ spec:
 
     - name: budget-assessment
       description: "Assess total cost and determine approval requirements"
-      inputSchema: "{ flightResults: .flightResults, hotelResults: .hotelResults }"
+      inputSchema: "{ flightResults: .flightResults, hotelResults: .hotelResults, cbrCalibration: .cbrCalibration }"
       outputSchema: "{ budgetAssessment: . }"
 
     - name: booking
       description: "Book selected flights and hotels"
-      inputSchema: "{ selectedDestination: .selectedDestination, flightResults: .flightResults, hotelResults: .hotelResults }"
+      inputSchema: "{ selectedDestination: .selectedDestination, flightResults: .flightResults, hotelResults: .hotelResults, cbrCalibration: .cbrCalibration }"
       outputSchema: "{ booking: . }"
 
     - name: rebooking

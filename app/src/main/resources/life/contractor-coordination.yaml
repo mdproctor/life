@@ -32,7 +32,7 @@ spec:
   capabilities:
     - name: request-quote
       description: "Issue a qhorus COMMAND on case-{caseId}/contractor-quote requesting a quote"
-      inputSchema: "{ contractorRequest: .contractorRequest }"
+      inputSchema: "{ contractorRequest: .contractorRequest, cbrCalibration: .cbrCalibration }"
       outputSchema: "{ quoteRequest: . }"
 
     - name: watchdog-escalation

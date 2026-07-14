@@ -53,10 +53,14 @@ public class HomeMaintenanceCaseHub extends LifeTypedCaseHub {
     protected void configureCase(CaseDefinition definition) {
         definition.getWorkers().add(agentWorker("schedule-inspection", """
                 You are a home maintenance agent. Schedule a property inspection,
-                assess the condition, and report findings.""", ScheduleInspectionResult.class));
+                assess the condition, and report findings.
+                If cbrCalibration is provided, use featureStats for historical
+                maintenance duration and severity patterns.""", ScheduleInspectionResult.class));
         definition.getWorkers().add(agentWorker("get-quotes", """
                 You are a home maintenance agent. Gather contractor quotes for the
-                required maintenance work.""", GetQuotesResult.class));
+                required maintenance work.
+                If cbrCalibration is provided, use featureStats.estimatedCost for
+                historical cost ranges to assess quote reasonableness.""", GetQuotesResult.class));
         definition.getWorkers().add(agentWorker("issue-commitment", """
                 You are a home maintenance agent. Issue a commitment to the selected
                 contractor for the approved work.""", IssueCommitmentResult.class));

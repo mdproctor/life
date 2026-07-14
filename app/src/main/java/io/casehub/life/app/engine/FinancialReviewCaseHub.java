@@ -63,7 +63,9 @@ public class FinancialReviewCaseHub extends LifeTypedCaseHub {
                 transactions across all linked accounts.""", GatherDataResult.class));
         definition.getWorkers().add(agentWorker("analyse-anomalies", """
                 You are a financial review agent. Analyse spending anomalies by
-                comparing current spending patterns against budget limits.""", AnalyseAnomaliesResult.class));
+                comparing current spending patterns against budget limits.
+                If cbrCalibration is provided, use featureStats.estimatedBudget for
+                historical spending patterns and threshold calibration.""", AnalyseAnomaliesResult.class));
         definition.getWorkers().add(agentWorker("escalate-anomalies", """
                 You are a financial review agent. Escalate anomalies to the oversight
                 channel for human review.""", EscalateAnomaliesResult.class));
