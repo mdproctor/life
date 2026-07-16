@@ -382,8 +382,35 @@ Note: `HouseholdTask`, `LifeGoal`, `LifeEvent` were removed in Layer 2 — they 
 - `CbrInputTransformer` — `app/cbr/` `UnaryOperator<JsonNode>`; reads
   `WorkerExecutionContext.current().experiences()` at execution time, merges `_cbrContext`
   into the Agent input. Registered on every Agent via `LifeTypedCaseHub.agentWorker()`.
-- `LifeCaseService.startCase()` — calls `suggest()` between Phase 1 and Phase 2,
-  writes `cbrCalibration` to initial case context.
+- `LifeCaseService.startCase()` — calls `retrieveForAdaptation()` between Phase 1 and Phase 2,
+  writes `cbrCalibration` (≥2 cases) and `adaptedPlan` (≥1 case) to initial case context.
+  Fires `CbrAdaptationRecorded` CDI event with `AdaptationTrace` after adaptation.
+- `LifeAdaptationRule` — `app/cbr/` internal SPI; 6 implementations in `app/cbr/adapt/`.
+  `caseType()`, `knownCapabilities()`, `adapt(ScoredCbrCase, Map<String, FeatureValue>)`.
+  Pure functions — no injected dependencies.
+- `LifePlanAdapter` — `app/cbr/` `@Alternative @Priority(10)` implements `PlanAdapter`
+  (neocortex SPI); dispatches to per-domain `LifeAdaptationRule` by caseType. Dual method
+  surface: SPI (infers caseType from capabilities) + life-internal (explicit caseType).
+  Displaces `NoOpPlanAdapter` (`@DefaultBean`).
+- `SeverityScaling` — `app/cbr/adapt/` static helper; shared severity-to-priority
+  scaling between `HealthAdaptationRule` and `AppointmentCycleAdaptationRule`.
+- `LifeCbrRetrievalResult` — `app/cbr/` record; carries `CbrSuggestions` + raw
+  `List<ScoredCbrCase<PlanCbrCase>>` + `Map<String, FeatureValue>` from retrieval.
+  Keeps neocortex types out of `api/`.
+- `LifeCbrSuggestionService.retrieveForAdaptation()` — retrieves cases with ≥1 threshold
+  (adaptation) vs ≥2 (statistics). Returns `LifeCbrRetrievalResult`.
+- `LifeCbrExperienceFormatter.formatAdaptedPlan()` — formats `AdaptedPlan` steps into
+  structured text for LLM consumption (capability, action, priority, reason, parameters).
+- `CbrInputTransformer` — enhanced: reads `adaptedPlan` from input JsonNode, deserializes,
+  formats via `formatAdaptedPlan()`, appends to `_cbrContext` alongside raw experiences.
+- 6 domain adaptation rules: `ContractorAdaptationRule` (season/budget/failed),
+  `HomeMaintenanceAdaptationRule` (seasonal SLA/cost/failed),
+  `HealthAdaptationRule` (severity/provider/SLA breach),
+  `AppointmentCycleAdaptationRule` (severity/provider/prep-time),
+  `FinancialAdaptationRule` (amount/escalation pattern),
+  `TravelPlanAdaptationRule` (budget/seasonal pricing/rejected booking).
+- Engine dependency: engine#738 (PlanAdapter wiring into CbrRetrievalService) — OPEN.
+  Until wired, life calls PlanAdapter directly from LifeCaseService.
 - 8 workers gain domain-specific CBR calibration instructions in system prompts.
 - 8 YAML capabilities gain `cbrCalibration` in `inputProjection`.
 
@@ -554,7 +581,15 @@ Layer 8: + casehub-neocortex (CBR) — Case-Based Reasoning for adaptive life au
          LifeCbrExperienceFormatter + CbrInputTransformer enrich every Agent with _cbrContext
          via inputTransformer. 8 workers gain calibration instructions, 8 YAML inputProjections
          gain cbrCalibration. CbrSuggestions/FeatureStatistics in api/.
-         ✅ COMPLETE (retention + retrieval + integration)  🔲 PENDING (#55 REVISE rules, #60 skill integration)
+         CBR adaptation (#55): LifePlanAdapter implements PlanAdapter SPI with 6 per-domain
+         LifeAdaptationRule implementations (contractor, home-maintenance, health, appointment,
+         financial, travel). Composite dispatch by caseType. SeverityScaling shared helper.
+         LifeCbrRetrievalResult + retrieveForAdaptation() (≥1 case threshold for adaptation,
+         ≥2 for statistics). AdaptedPlan written to case context; CbrInputTransformer enhanced
+         to format adapted plan alongside raw experiences. AdaptationTrace fired as CDI event.
+         Engine dependency: engine#738 (PlanAdapter wiring into CbrRetrievalService) — OPEN.
+         Trust-score-aware adaptation deferred to life#67.
+         ✅ COMPLETE (retention + retrieval + integration + adaptation)  🔲 PENDING (#60 skill integration, #67 trust-aware adaptation)
 ```
 
 ### Foundation Gates
@@ -571,6 +606,7 @@ Layer 8: + casehub-neocortex (CBR) — Case-Based Reasoning for adaptive life au
 | OpenClaw as WorkerProvisioner | Pending — research spec 2026-05-25 |
 | CBR retention + retrieval + integration | casehub-neocortex-memory-api ✅; CaseOutcomeObserver ✅; RoutingOutcomeRecorder ✅; CbrRetrievalService ✅; LifeCbrSuggestionService ✅; CbrInputTransformer ✅ |
 | CBR-informed routing | engine#505 CLOSED ✅ — routing consumes CBR experiences; engine#707 CLOSED ✅ — experiences flow to workers |
+| CBR adaptation | PlanAdapter SPI ✅ (neocortex); LifePlanAdapter ✅ (life); 6 domain rules ✅; engine#738 OPEN — PlanAdapter wiring into CbrRetrievalService |
 
 ---
 

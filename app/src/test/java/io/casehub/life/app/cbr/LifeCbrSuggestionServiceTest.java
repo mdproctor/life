@@ -130,6 +130,68 @@ class LifeCbrSuggestionServiceTest {
         assertEquals(1.0, result.historicalSuccessRate(), 0.001);
     }
 
+    @Test
+    void retrieveForAdaptation_noExtraction_returnsEmpty() {
+        when(featureExtractor.extract(eq("travel-plan"), any())).thenReturn(Optional.empty());
+        var result = service.retrieveForAdaptation(LifeCaseType.TRAVEL_PLAN, Map.of());
+        assertTrue(result.cases().isEmpty());
+        assertTrue(result.suggestions().isEmpty());
+    }
+
+    @Test
+    void retrieveForAdaptation_oneCase_emptySuggestionsNonEmptyCases() {
+        var config = mockConfig();
+        when(featureExtractor.extract(eq("travel-plan"), any()))
+                .thenReturn(Optional.of(new LifeCbrFeatureExtractor.ExtractionResult(
+                        config, Map.of("budget", FeatureValue.number(2000)))));
+        when(cbrStore.retrieveSimilar(any(), eq(PlanCbrCase.class)))
+                .thenReturn(List.of(scoredCase(2000, "COMPLETED", 0.8)));
+        var result = service.retrieveForAdaptation(LifeCaseType.TRAVEL_PLAN, Map.of());
+        assertEquals(1, result.cases().size());
+        assertTrue(result.suggestions().isEmpty());
+    }
+
+    @Test
+    void retrieveForAdaptation_twoCases_populatesSuggestions() {
+        var config = mockConfig();
+        when(featureExtractor.extract(eq("travel-plan"), any()))
+                .thenReturn(Optional.of(new LifeCbrFeatureExtractor.ExtractionResult(
+                        config, Map.of("budget", FeatureValue.number(2000)))));
+        when(cbrStore.retrieveSimilar(any(), eq(PlanCbrCase.class)))
+                .thenReturn(List.of(
+                        scoredCase(1500, "COMPLETED", 0.9),
+                        scoredCase(2000, "COMPLETED", 0.8)));
+        var result = service.retrieveForAdaptation(LifeCaseType.TRAVEL_PLAN, Map.of());
+        assertEquals(2, result.cases().size());
+        assertFalse(result.suggestions().isEmpty());
+        assertEquals(2, result.suggestions().experienceCount());
+    }
+
+    @Test
+    void retrieveForAdaptation_noCases_returnsEmpty() {
+        var config = mockConfig();
+        when(featureExtractor.extract(eq("travel-plan"), any()))
+                .thenReturn(Optional.of(new LifeCbrFeatureExtractor.ExtractionResult(
+                        config, Map.of("budget", FeatureValue.number(2000)))));
+        when(cbrStore.retrieveSimilar(any(), eq(PlanCbrCase.class)))
+                .thenReturn(List.of());
+        var result = service.retrieveForAdaptation(LifeCaseType.TRAVEL_PLAN, Map.of());
+        assertTrue(result.cases().isEmpty());
+    }
+
+    @Test
+    void retrieveForAdaptation_returnsCurrentFeatures() {
+        var config = mockConfig();
+        Map<String, FeatureValue> features = Map.of("budget", FeatureValue.number(2000));
+        when(featureExtractor.extract(eq("travel-plan"), any()))
+                .thenReturn(Optional.of(new LifeCbrFeatureExtractor.ExtractionResult(
+                        config, features)));
+        when(cbrStore.retrieveSimilar(any(), eq(PlanCbrCase.class)))
+                .thenReturn(List.of(scoredCase(2000, "COMPLETED", 0.8)));
+        var result = service.retrieveForAdaptation(LifeCaseType.TRAVEL_PLAN, Map.of());
+        assertEquals(features, result.currentFeatures());
+    }
+
     private CbrConfig mockConfig() {
         var config = mock(CbrConfig.class);
         when(config.topK()).thenReturn(5);

@@ -45,6 +45,8 @@ public abstract class LifeTypedCaseHub extends YamlCaseHub {
     LifeAgentDescriptorFactory descriptorFactory;
     @Inject
     LifeCbrExperienceFormatter cbrFormatter;
+    @Inject
+    com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     CbrInputTransformer cbrInputTransformer;
 
 
@@ -85,7 +87,7 @@ public abstract class LifeTypedCaseHub extends YamlCaseHub {
 
     @jakarta.annotation.PostConstruct
     void initCbrTransformer() {
-        this.cbrInputTransformer = new CbrInputTransformer(cbrFormatter);
+        this.cbrInputTransformer = new CbrInputTransformer(cbrFormatter, objectMapper);
     }
 }
 

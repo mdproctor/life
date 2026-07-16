@@ -25,7 +25,7 @@ class CbrInputTransformerTest {
 
     @Test
     void apply_noWorkerContext_passThrough() {
-        var transformer = new CbrInputTransformer(new LifeCbrExperienceFormatter());
+        var transformer = new CbrInputTransformer(new LifeCbrExperienceFormatter(), new com.fasterxml.jackson.databind.ObjectMapper());
         ObjectNode input = MAPPER.createObjectNode().put("key", "value");
         JsonNode result = transformer.apply(input);
         assertEquals("value", result.get("key").asText());
@@ -34,7 +34,7 @@ class CbrInputTransformerTest {
 
     @Test
     void apply_emptyExperiences_passThrough() {
-        var transformer = new CbrInputTransformer(new LifeCbrExperienceFormatter());
+        var transformer = new CbrInputTransformer(new LifeCbrExperienceFormatter(), new com.fasterxml.jackson.databind.ObjectMapper());
         WorkerExecutionContext.set(new WorkerContext("task", null, List.of(), List.of(), null, Map.of(), List.of()));
         ObjectNode input = MAPPER.createObjectNode().put("key", "value");
         JsonNode result = transformer.apply(input);
@@ -43,7 +43,7 @@ class CbrInputTransformerTest {
 
     @Test
     void apply_withExperiences_mergesCbrContext() {
-        var transformer = new CbrInputTransformer(new LifeCbrExperienceFormatter());
+        var transformer = new CbrInputTransformer(new LifeCbrExperienceFormatter(), new com.fasterxml.jackson.databind.ObjectMapper());
         var exp = new RetrievedExperience("problem", "solution", "COMPLETED", 0.9,
                 0.85, Map.of(), List.of(), Map.of());
         WorkerExecutionContext.set(new WorkerContext("task", null, List.of(), List.of(), null, Map.of(), List.of(exp)));
@@ -56,12 +56,57 @@ class CbrInputTransformerTest {
 
     @Test
     void apply_doesNotMutateOriginalInput() {
-        var transformer = new CbrInputTransformer(new LifeCbrExperienceFormatter());
+        var transformer = new CbrInputTransformer(new LifeCbrExperienceFormatter(), new com.fasterxml.jackson.databind.ObjectMapper());
         var exp = new RetrievedExperience("problem", "solution", "COMPLETED", 0.9,
                 0.85, Map.of(), List.of(), Map.of());
         WorkerExecutionContext.set(new WorkerContext("task", null, List.of(), List.of(), null, Map.of(), List.of(exp)));
         ObjectNode input = MAPPER.createObjectNode().put("key", "value");
         transformer.apply(input);
         assertFalse(input.has("_cbrContext"));
+    }
+
+    @Test
+    void apply_withAdaptedPlan_mergesIntoCbrContext() {
+        var transformer = new CbrInputTransformer(new LifeCbrExperienceFormatter(), MAPPER);
+        ObjectNode adaptedPlan = MAPPER.createObjectNode();
+        adaptedPlan.putArray("steps").addObject()
+                .put("bindingName", "b1")
+                .put("capabilityName", "request-quote")
+                .put("workerName", "w1")
+                .put("stepOutcome", "ok")
+                .put("priority", 8)
+                .put("action", "BOOSTED")
+                .put("reason", "Winter urgency")
+                .putObject("parameters").put("slaHours", 24);
+        ObjectNode input = MAPPER.createObjectNode().put("key", "value");
+        input.set("adaptedPlan", adaptedPlan);
+        JsonNode result = transformer.apply(input);
+        assertTrue(result.has("_cbrContext"));
+        assertTrue(result.get("_cbrContext").asText().contains("request-quote"));
+        assertTrue(result.get("_cbrContext").asText().contains("BOOSTED"));
+        assertFalse(result.has("adaptedPlan"));
+        assertEquals("value", result.get("key").asText());
+    }
+
+    @Test
+    void apply_adaptedPlanAndExperiences_combinesBoth() {
+        var transformer = new CbrInputTransformer(new LifeCbrExperienceFormatter(), MAPPER);
+        var exp = new RetrievedExperience("problem", "solution", "COMPLETED", 0.9,
+                0.85, Map.of(), List.of(), Map.of());
+        WorkerExecutionContext.set(new WorkerContext("task", null, List.of(), List.of(), null, Map.of(), List.of(exp)));
+        ObjectNode adaptedPlan = MAPPER.createObjectNode();
+        adaptedPlan.putArray("steps").addObject()
+                .put("bindingName", "b1")
+                .put("capabilityName", "cap1")
+                .put("workerName", "w1")
+                .put("priority", 5)
+                .put("action", "RETAINED")
+                .putObject("parameters");
+        ObjectNode input = MAPPER.createObjectNode();
+        input.set("adaptedPlan", adaptedPlan);
+        JsonNode result = transformer.apply(input);
+        String ctx = result.get("_cbrContext").asText();
+        assertTrue(ctx.contains("problem"));
+        assertTrue(ctx.contains("Adapted Plan"));
     }
 }

@@ -17,13 +17,16 @@ package io.casehub.life.app.engine;
 
 import io.casehub.api.engine.CaseHub;
 import io.casehub.api.engine.CaseHubRuntime;
-import io.casehub.life.api.CbrSuggestions;
 import io.casehub.life.api.LifeCaseStatus;
 import io.casehub.life.api.LifeCaseType;
 import io.casehub.life.api.request.CreateLifeCaseRequest;
 import io.casehub.life.api.response.LifeCaseResponse;
+import io.casehub.life.app.cbr.LifeCbrRetrievalResult;
 import io.casehub.life.app.cbr.LifeCbrSuggestionService;
 import io.casehub.life.app.entity.LifeCaseTracker;
+import io.casehub.neocortex.memory.cbr.AdaptationTrace;
+import io.casehub.neocortex.memory.cbr.AdaptedPlan;
+import io.casehub.neocortex.memory.cbr.CbrAdaptationRecorded;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
@@ -52,34 +55,58 @@ public class LifeCaseService {
 
     private static final Logger LOG = Logger.getLogger(LifeCaseService.class);
 
-    @Inject @Any Instance<LifeTypedCaseHub> caseHubs;
-    @Inject CaseHubRuntime caseHubRuntime;
     @Inject
-            LifeCbrSuggestionService cbrSuggestionService;
+    @Any
+    Instance<LifeTypedCaseHub>                                                            caseHubs;
     @Inject
-    com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    CaseHubRuntime                                                                        caseHubRuntime;
+    @Inject
+    LifeCbrSuggestionService                                                              cbrSuggestionService;
+    @Inject
+    com.fasterxml.jackson.databind.ObjectMapper                                           objectMapper;
+    @Inject
+    io.casehub.life.app.cbr.LifePlanAdapter                                               planAdapter;
+    @Inject
+    jakarta.enterprise.event.Event<io.casehub.neocortex.memory.cbr.CbrAdaptationRecorded> adaptationEvent;
 
 
     public LifeCaseResponse startCase(CreateLifeCaseRequest request) {
         UUID trackerId = UUID.randomUUID();
         try {
-            // Phase 1: @Transactional - validate, track, build context
             Map<String, Object> initialContext = prepareAndTrack(trackerId, request);
 
-            // CBR enrichment: between phases, no transaction held.
-            // suggest() handles its own errors — returns EMPTY on failure.
-            CbrSuggestions suggestions = cbrSuggestionService.suggest(
+            LifeCbrRetrievalResult retrieval = cbrSuggestionService.retrieveForAdaptation(
                     request.caseType(), initialContext);
-            if (!suggestions.isEmpty()) {
+
+            if (!retrieval.suggestions().isEmpty()) {
                 initialContext.put("cbrCalibration",
-                                   objectMapper.convertValue(suggestions, Map.class));
+                                   objectMapper.convertValue(retrieval.suggestions(), Map.class));
             }
 
-            // Phase 2: no transaction - start the case and wait for caseId
+            if (!retrieval.cases().isEmpty()) {
+                var bestMatch = retrieval.cases().getFirst();
+                AdaptedPlan adaptedPlan = planAdapter.adapt(
+                        request.caseType().caseName(), bestMatch, retrieval.currentFeatures());
+                if (!adaptedPlan.steps().isEmpty()) {
+                    initialContext.put("adaptedPlan",
+                                       objectMapper.convertValue(adaptedPlan, Map.class));
+                }
+                adaptationEvent.fire(new CbrAdaptationRecorded(new AdaptationTrace(
+                        UUID.randomUUID().toString(),
+                        null,
+                        bestMatch.caseId(),
+                        bestMatch.score(),
+                        adaptedPlan.steps(),
+                        retrieval.currentFeatures(),
+                        Instant.now())));
+                if (bestMatch.caseId() == null) {
+                    LOG.warn("Adaptation trace has null sourceCaseId — untraceable to source case");
+                }
+            }
+
             CaseHub caseHub = resolve(request.caseType());
             UUID    caseId  = caseHub.startCase(initialContext).toCompletableFuture().join();
 
-            // Phase 3: @Transactional - persist caseId, signal into context
             persistCaseId(trackerId, caseId);
             caseHubRuntime.signal(caseId, "caseId", caseId.toString());
 
@@ -92,14 +119,15 @@ public class LifeCaseService {
                 LOG.errorf(mfe, "markFailed also failed for tracker=%s", trackerId);
             }
             throw new RuntimeException("Case start failed: " + e.getMessage(), e);
-        }}
+        }
+    }
 
     @Transactional
     Map<String, Object> prepareAndTrack(UUID trackerId, CreateLifeCaseRequest request) {
         LifeCaseTracker tracker = new LifeCaseTracker();
-        tracker.id = trackerId;
+        tracker.id       = trackerId;
         tracker.caseType = request.caseType().caseName();
-        tracker.status = LifeCaseStatus.ACTIVE;
+        tracker.status   = LifeCaseStatus.ACTIVE;
         tracker.persist();
 
         Map<String, Object> ctx = new HashMap<>(request.context());
@@ -119,18 +147,18 @@ public class LifeCaseService {
     void markFailed(UUID trackerId) {
         LifeCaseTracker tracker = LifeCaseTracker.findById(trackerId);
         if (tracker != null) {
-            tracker.status = LifeCaseStatus.FAILED;
+            tracker.status      = LifeCaseStatus.FAILED;
             tracker.completedAt = Instant.now();
         }
     }
 
     private CaseHub resolve(LifeCaseType type) {
         return caseHubs.stream()
-                .filter(hub -> hub.lifeCaseType() == type)
-                .findFirst()
-                .orElseThrow(
-                        () ->
-                                new IllegalArgumentException(
-                                        "No CaseHub registered for type: " + type));
+                       .filter(hub -> hub.lifeCaseType() == type)
+                       .findFirst()
+                       .orElseThrow(
+                               () ->
+                                       new IllegalArgumentException(
+                                               "No CaseHub registered for type: " + type));
     }
 }

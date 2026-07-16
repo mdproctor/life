@@ -73,6 +73,45 @@ public class LifeCbrSuggestionService {
         }
     }
 
+    public LifeCbrRetrievalResult retrieveForAdaptation(LifeCaseType caseType,
+                                                        Map<String, Object> initialContext) {
+        try {
+            JsonNode contextNode = objectMapper.valueToTree(initialContext);
+            var      extraction  = featureExtractor.extract(caseType.caseName(), contextNode);
+            if (extraction.isEmpty()) {return LifeCbrRetrievalResult.EMPTY;}
+
+            var       result = extraction.get();
+            CbrConfig config = result.config();
+
+            CbrQuery query = CbrQuery.of(
+                                             TENANT_ID,
+                                             new MemoryDomain(config.domain()),
+                                             caseType.caseName(),
+                                             result.features(),
+                                             config.topK())
+                                     .withWeights(config.weights())
+                                     .withMinSimilarity(config.minSimilarity())
+                                     .withVectorWeight(config.vectorWeight());
+
+            List<ScoredCbrCase<PlanCbrCase>> cases = cbrStore.retrieveSimilar(query, PlanCbrCase.class);
+            if (cases.isEmpty()) {return LifeCbrRetrievalResult.EMPTY;}
+
+            CbrSuggestions suggestions = CbrSuggestions.EMPTY;
+            if (cases.size() >= 2) {
+                Map<String, FeatureStatistics> featureStats  = computeFeatureStats(cases);
+                double                         successRate   = computeSuccessRate(cases);
+                double                         avgSimilarity = cases.stream().mapToDouble(ScoredCbrCase::score).average().orElse(0.0);
+                suggestions = new CbrSuggestions(featureStats, successRate, cases.size(), avgSimilarity);
+            }
+
+            return new LifeCbrRetrievalResult(suggestions, cases, result.features());
+        } catch (Exception e) {
+            LOG.warnf(e, "CBR retrieval for adaptation failed for %s — returning empty", caseType);
+            return LifeCbrRetrievalResult.EMPTY;
+        }
+    }
+
+
     private Map<String, FeatureStatistics> computeFeatureStats(List<ScoredCbrCase<PlanCbrCase>> cases) {
         Map<String, List<Double>> numericValues = new LinkedHashMap<>();
         for (var scored : cases) {

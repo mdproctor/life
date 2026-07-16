@@ -89,4 +89,47 @@ class LifeCbrExperienceFormatterTest {
         String result = formatter.format(List.of(exp));
         assertFalse(result.contains("Key features:"));
     }
+
+    @Test
+    void formatAdaptedPlan_null_returnsNull() {
+        assertNull(formatter.formatAdaptedPlan(null));
+    }
+
+    @Test
+    void formatAdaptedPlan_emptySteps_returnsNull() {
+        assertNull(formatter.formatAdaptedPlan(
+                new io.casehub.neocortex.memory.cbr.AdaptedPlan(List.of())));
+    }
+
+    @Test
+    void formatAdaptedPlan_singleStep_formatsCorrectly() {
+        var step = new io.casehub.neocortex.memory.cbr.AdaptedStep(
+                "b1", "request-quote", "w1", "ok", 8,
+                Map.of("slaHours", 24),
+                io.casehub.neocortex.memory.cbr.AdaptationAction.BOOSTED,
+                "Winter heating — tighter SLA needed");
+        var plan = new io.casehub.neocortex.memory.cbr.AdaptedPlan(List.of(step));
+        String result = formatter.formatAdaptedPlan(plan);
+        assertNotNull(result);
+        assertTrue(result.contains("## Adapted Plan"));
+        assertTrue(result.contains("### request-quote"));
+        assertTrue(result.contains("BOOSTED"));
+        assertTrue(result.contains("priority: 8"));
+        assertTrue(result.contains("Reason: Winter heating"));
+        assertTrue(result.contains("slaHours=24"));
+    }
+
+    @Test
+    void formatAdaptedPlan_suppressedStep_noParameters() {
+        var step = new io.casehub.neocortex.memory.cbr.AdaptedStep(
+                "b1", "old-approach", "w1", "failed", 0,
+                Map.of(),
+                io.casehub.neocortex.memory.cbr.AdaptationAction.SUPPRESSED,
+                "Past case with this approach failed");
+        var plan = new io.casehub.neocortex.memory.cbr.AdaptedPlan(List.of(step));
+        String result = formatter.formatAdaptedPlan(plan);
+        assertTrue(result.contains("SUPPRESSED"));
+        assertTrue(result.contains("Past case with this approach failed"));
+        assertFalse(result.contains("Parameters:"));
+    }
 }
