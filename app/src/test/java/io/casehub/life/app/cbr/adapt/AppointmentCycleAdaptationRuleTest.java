@@ -74,6 +74,20 @@ class AppointmentCycleAdaptationRuleTest {
         assertTrue(rule.adapt(new ScoredCbrCase<>(past, "c1", 0.8), Map.of()).isEmpty());
     }
 
+    @Test
+    void lowActorTrust_flagsProviderReview() {
+        var scored = scored(Map.of(
+                "followUpIntervalDays", FeatureValue.number(14),
+                "providerType", FeatureValue.string("GP")));
+        Map<String, FeatureValue> current = new java.util.LinkedHashMap<>(Map.of(
+                "followUpIntervalDays", FeatureValue.number(14),
+                "providerType", FeatureValue.string("GP"),
+                "actorTrustScore", FeatureValue.number(0.2)));
+        var steps = rule.adapt(scored, current);
+        assertTrue(steps.stream().anyMatch(s -> s.reason() != null && s.reason().toLowerCase().contains("trust")));
+    }
+
+
     private ScoredCbrCase<PlanCbrCase> scored(Map<String, FeatureValue> features) {
         return new ScoredCbrCase<>(
                 new PlanCbrCase("problem", "solution", "COMPLETED", 0.9, features,

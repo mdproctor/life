@@ -1,7 +1,6 @@
 package io.casehub.life.app.cbr.adapt;
 
 import io.casehub.neocortex.memory.cbr.AdaptationAction;
-import io.casehub.neocortex.memory.cbr.AdaptedStep;
 import io.casehub.neocortex.memory.cbr.FeatureValue;
 import io.casehub.neocortex.memory.cbr.PlanCbrCase;
 import io.casehub.neocortex.memory.cbr.PlanTrace;
@@ -12,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ContractorAdaptationRuleTest {
@@ -103,6 +101,39 @@ class ContractorAdaptationRuleTest {
         var scored = new ScoredCbrCase<>(past, "c1", 0.8);
         assertTrue(rule.adapt(scored, Map.of()).isEmpty());
     }
+
+    @Test
+    void lowActorTrust_flagsSteps() {
+        var scored = scored(Map.of(
+                "season", FeatureValue.string("summer"),
+                "problemType", FeatureValue.string("plumbing"),
+                "budget", FeatureValue.number(1000)));
+        Map<String, FeatureValue> current = new java.util.LinkedHashMap<>(Map.of(
+                "season", FeatureValue.string("summer"),
+                "problemType", FeatureValue.string("plumbing"),
+                "budget", FeatureValue.number(1000),
+                "actorTrustScore", FeatureValue.number(0.2)));
+        var steps = rule.adapt(scored, current);
+        assertTrue(steps.stream().anyMatch(s -> s.reason() != null && s.reason().toLowerCase().contains("trust")));
+    }
+
+    @Test
+    void lowDeadlineReliability_boostsWatchdog() {
+        var past = new PlanCbrCase("p", "s", "COMPLETED", 0.9,
+                                   Map.of("budget", FeatureValue.number(1000)),
+                                   List.of(new PlanTrace("b1", "request-quote", "w1", "ok", 5, Map.of()),
+                                           new PlanTrace("b2", "watchdog-escalation", "w2", "ok", 3, Map.of())));
+        var scored = new ScoredCbrCase<>(past, "c1", 0.85);
+        Map<String, FeatureValue> current = new java.util.LinkedHashMap<>(Map.of(
+                "budget", FeatureValue.number(1000),
+                "actorDeadlineReliability", FeatureValue.number(0.3)));
+        var steps = rule.adapt(scored, current);
+        var watchdog = steps.stream()
+                            .filter(s -> "watchdog-escalation".equals(s.capabilityName())).findFirst().orElseThrow();
+        assertEquals(AdaptationAction.BOOSTED, watchdog.action());
+        assertTrue(watchdog.reason().toLowerCase().contains("deadline"));
+    }
+
 
     private ScoredCbrCase<PlanCbrCase> scored(Map<String, FeatureValue> features) {
         return new ScoredCbrCase<>(

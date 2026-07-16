@@ -68,6 +68,8 @@ public class LifeCaseService {
     io.casehub.life.app.cbr.LifePlanAdapter                                               planAdapter;
     @Inject
     jakarta.enterprise.event.Event<io.casehub.neocortex.memory.cbr.CbrAdaptationRecorded> adaptationEvent;
+    @Inject
+    io.casehub.life.app.cbr.LifeTrustFeatureEnricher                                      trustFeatureEnricher;
 
 
     public LifeCaseResponse startCase(CreateLifeCaseRequest request) {
@@ -85,8 +87,10 @@ public class LifeCaseService {
 
             if (!retrieval.cases().isEmpty()) {
                 var bestMatch = retrieval.cases().getFirst();
+                Map<String, io.casehub.neocortex.memory.cbr.FeatureValue> enrichedFeatures =
+                        trustFeatureEnricher.enrich(retrieval.currentFeatures(), initialContext);
                 AdaptedPlan adaptedPlan = planAdapter.adapt(
-                        request.caseType().caseName(), bestMatch, retrieval.currentFeatures());
+                        request.caseType().caseName(), bestMatch, enrichedFeatures);
                 if (!adaptedPlan.steps().isEmpty()) {
                     initialContext.put("adaptedPlan",
                                        objectMapper.convertValue(adaptedPlan, Map.class));
@@ -97,7 +101,7 @@ public class LifeCaseService {
                         bestMatch.caseId(),
                         bestMatch.score(),
                         adaptedPlan.steps(),
-                        retrieval.currentFeatures(),
+                        enrichedFeatures,
                         Instant.now())));
                 if (bestMatch.caseId() == null) {
                     LOG.warn("Adaptation trace has null sourceCaseId — untraceable to source case");

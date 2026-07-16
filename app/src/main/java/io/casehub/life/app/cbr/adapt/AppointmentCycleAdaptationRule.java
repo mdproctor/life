@@ -35,27 +35,28 @@ public class AppointmentCycleAdaptationRule implements LifeAdaptationRule {
     @Override
     public List<AdaptedStep> adapt(ScoredCbrCase<PlanCbrCase> retrieved,
                                    Map<String, FeatureValue> currentFeatures) {
-        PlanCbrCase past = retrieved.cbrCase();
-        double currentFollowUp = numericFeature(currentFeatures, "followUpIntervalDays");
-        double pastFollowUp = numericFeature(past.features(), "followUpIntervalDays");
-        String currentProvider = stringFeature(currentFeatures, "providerType");
-        String pastProvider = stringFeature(past.features(), "providerType");
-        String currentCondition = stringFeature(currentFeatures, "conditionCategory");
-        String pastCondition = stringFeature(past.features(), "conditionCategory");
+        PlanCbrCase past             = retrieved.cbrCase();
+        double      currentFollowUp  = numericFeature(currentFeatures, "followUpIntervalDays");
+        double      pastFollowUp     = numericFeature(past.features(), "followUpIntervalDays");
+        String      currentProvider  = stringFeature(currentFeatures, "providerType");
+        String      pastProvider     = stringFeature(past.features(), "providerType");
+        String      currentCondition = stringFeature(currentFeatures, "conditionCategory");
+        String      pastCondition    = stringFeature(past.features(), "conditionCategory");
+        double      trustScore       = numericFeature(currentFeatures, "actorTrustScore");
 
         List<AdaptedStep> steps = new ArrayList<>();
         for (PlanTrace trace : past.planTrace()) {
-            Map<String, Object> params = new LinkedHashMap<>(trace.parameters());
-            int priority = trace.priority();
-            AdaptationAction action = AdaptationAction.RETAINED;
-            String reason = null;
+            Map<String, Object> params   = new LinkedHashMap<>(trace.parameters());
+            int                 priority = trace.priority();
+            AdaptationAction    action   = AdaptationAction.RETAINED;
+            String              reason   = null;
 
             int scaled = SeverityScaling.scale(pastFollowUp > 0 ? 1.0 / pastFollowUp : 0,
-                    currentFollowUp > 0 ? 1.0 / currentFollowUp : 0, priority);
+                                               currentFollowUp > 0 ? 1.0 / currentFollowUp : 0, priority);
             if (scaled > priority) {
                 priority = scaled;
-                action = AdaptationAction.BOOSTED;
-                reason = "Shorter follow-up interval (%.0f → %.0f days)".formatted(
+                action   = AdaptationAction.BOOSTED;
+                reason   = "Shorter follow-up interval (%.0f → %.0f days)".formatted(
                         pastFollowUp, currentFollowUp);
                 if (currentFollowUp > 0) {
                     params.put("followUpIntervalDays", (int) currentFollowUp);
@@ -63,23 +64,28 @@ public class AppointmentCycleAdaptationRule implements LifeAdaptationRule {
             }
 
             if (!pastProvider.isEmpty() && !currentProvider.isEmpty()
-                    && !pastProvider.equals(currentProvider)) {
+                && !pastProvider.equals(currentProvider)) {
                 reason = (reason != null ? reason + "; " : "")
-                        + "Provider type changed (%s → %s) — review applicability".formatted(
+                         + "Provider type changed (%s → %s) — review applicability".formatted(
                         pastProvider, currentProvider);
             }
 
             if ("pre-visit-prep".equals(trace.capabilityName())
-                    && !pastCondition.isEmpty() && !currentCondition.isEmpty()
-                    && !pastCondition.equals(currentCondition)) {
+                && !pastCondition.isEmpty() && !currentCondition.isEmpty()
+                && !pastCondition.equals(currentCondition)) {
                 reason = (reason != null ? reason + "; " : "")
-                        + "Condition changed (%s → %s) — adjust preparation".formatted(
+                         + "Condition changed (%s → %s) — adjust preparation".formatted(
                         pastCondition, currentCondition);
             }
 
+            if (trustScore > 0 && trustScore < 0.3) {
+                reason = (reason != null ? reason + "; " : "")
+                         + "Provider trust below threshold (%.2f) — review provider selection".formatted(trustScore);
+            }
+
             steps.add(new AdaptedStep(trace.bindingName(), trace.capabilityName(),
-                    trace.workerName(), trace.stepOutcome(), priority,
-                    params, action, reason));
+                                      trace.workerName(), trace.stepOutcome(), priority,
+                                      params, action, reason));
         }
         return steps;
     }

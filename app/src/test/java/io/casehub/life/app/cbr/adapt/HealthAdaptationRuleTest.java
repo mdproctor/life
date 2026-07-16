@@ -73,6 +73,35 @@ class HealthAdaptationRuleTest {
         assertTrue(rule.adapt(new ScoredCbrCase<>(past, "c1", 0.8), Map.of()).isEmpty());
     }
 
+    @Test
+    void lowActorTrust_flagsProviderReview() {
+        var scored = scored(Map.of(
+                "patientRiskLevel", FeatureValue.number(5.0),
+                "careType", FeatureValue.string("general")));
+        Map<String, FeatureValue> current = new java.util.LinkedHashMap<>(Map.of(
+                "patientRiskLevel", FeatureValue.number(5.0),
+                "careType", FeatureValue.string("general"),
+                "actorTrustScore", FeatureValue.number(0.2)));
+        var steps = rule.adapt(scored, current);
+        assertTrue(steps.stream().anyMatch(s -> s.reason() != null && s.reason().toLowerCase().contains("trust")));
+    }
+
+    @Test
+    void lowFactualAccuracy_boostsHealthCheck() {
+        var past = new PlanCbrCase("p", "s", "COMPLETED", 0.9,
+                                   Map.of("patientRiskLevel", FeatureValue.number(5.0)),
+                                   List.of(new PlanTrace("b1", "health-check", "w1", "ok", 5, Map.of())));
+        var scored = new ScoredCbrCase<>(past, "c1", 0.85);
+        Map<String, FeatureValue> current = new java.util.LinkedHashMap<>(Map.of(
+                "patientRiskLevel", FeatureValue.number(5.0),
+                "actorFactualAccuracy", FeatureValue.number(0.3)));
+        var steps       = rule.adapt(scored, current);
+        var healthCheck = steps.getFirst();
+        assertEquals(AdaptationAction.BOOSTED, healthCheck.action());
+        assertTrue(healthCheck.reason().toLowerCase().contains("factual accuracy"));
+    }
+
+
     private ScoredCbrCase<PlanCbrCase> scored(Map<String, FeatureValue> features) {
         return new ScoredCbrCase<>(
                 new PlanCbrCase("problem", "solution", "COMPLETED", 0.9, features,

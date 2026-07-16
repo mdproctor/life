@@ -403,12 +403,23 @@ Note: `HouseholdTask`, `LifeGoal`, `LifeEvent` were removed in Layer 2 — they 
   structured text for LLM consumption (capability, action, priority, reason, parameters).
 - `CbrInputTransformer` — enhanced: reads `adaptedPlan` from input JsonNode, deserializes,
   formats via `formatAdaptedPlan()`, appends to `_cbrContext` alongside raw experiences.
-- 6 domain adaptation rules: `ContractorAdaptationRule` (season/budget/failed),
-  `HomeMaintenanceAdaptationRule` (seasonal SLA/cost/failed),
-  `HealthAdaptationRule` (severity/provider/SLA breach),
-  `AppointmentCycleAdaptationRule` (severity/provider/prep-time),
+- 6 domain adaptation rules: `ContractorAdaptationRule` (season/budget/failed/trust),
+  `HomeMaintenanceAdaptationRule` (seasonal SLA/cost/failed/trust),
+  `HealthAdaptationRule` (severity/provider/SLA breach/trust/factual-accuracy),
+  `AppointmentCycleAdaptationRule` (severity/provider/prep-time/trust),
   `FinancialAdaptationRule` (amount/escalation pattern),
   `TravelPlanAdaptationRule` (budget/seasonal pricing/rejected booking).
+- `LifeTrustFeatureEnricher` — `app/cbr/` `@ApplicationScoped`; enriches CBR feature
+  map with trust scores from `TrustGateService` when `externalActorId` is in context.
+  Adds `actorTrustScore`, `actorDeadlineReliability`, `actorCostAccuracy`,
+  `actorFactualAccuracy`, `actorProactiveAlerting` as `FeatureValue.NumberVal` entries.
+  Only adds features when `OptionalDouble` scores are present.
+  Called by `LifeCaseService.startCase()` between retrieval and adaptation.
+- Trust-aware adaptation: 4 rules (Contractor, Health, AppointmentCycle, HomeMaintenance)
+  check enriched trust features. Low global trust (< 0.3) flags steps with
+  "consider alternative" reason. Low dimension scores (< 0.5) BOOST monitoring
+  capabilities (watchdog-escalation, maintenance-sentinel, health-check).
+  FinancialAdaptationRule and TravelPlanAdaptationRule do not involve external actors.
 - Engine dependency: engine#738 (PlanAdapter wiring into CbrRetrievalService) — OPEN.
   Until wired, life calls PlanAdapter directly from LifeCaseService.
 - 8 workers gain domain-specific CBR calibration instructions in system prompts.
@@ -588,8 +599,11 @@ Layer 8: + casehub-neocortex (CBR) — Case-Based Reasoning for adaptive life au
          ≥2 for statistics). AdaptedPlan written to case context; CbrInputTransformer enhanced
          to format adapted plan alongside raw experiences. AdaptationTrace fired as CDI event.
          Engine dependency: engine#738 (PlanAdapter wiring into CbrRetrievalService) — OPEN.
-         Trust-score-aware adaptation deferred to life#67.
-         ✅ COMPLETE (retention + retrieval + integration + adaptation)  🔲 PENDING (#60 skill integration, #67 trust-aware adaptation)
+         Trust-score-aware adaptation (#67): LifeTrustFeatureEnricher queries TrustGateService
+         for actors in context, enriches feature map before adapt(). 4 rules gain trust logic
+         (Contractor, Health, AppointmentCycle, HomeMaintenance). FeatureStatistics upstream
+         move tracked as neocortex#157.
+         ✅ COMPLETE (retention + retrieval + integration + adaptation + trust-aware)  🔲 PENDING (#60 skill integration)
 ```
 
 ### Foundation Gates

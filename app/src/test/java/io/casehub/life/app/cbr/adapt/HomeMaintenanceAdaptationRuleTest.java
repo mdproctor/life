@@ -77,6 +77,39 @@ class HomeMaintenanceAdaptationRuleTest {
         assertTrue(rule.adapt(new ScoredCbrCase<>(past, "c1", 0.8), Map.of()).isEmpty());
     }
 
+    @Test
+    void lowActorTrust_flagsSteps() {
+        var scored = scored(Map.of(
+                "season", FeatureValue.string("summer"),
+                "issueType", FeatureValue.string("painting"),
+                "estimatedCost", FeatureValue.number(500)));
+        Map<String, FeatureValue> current = new java.util.LinkedHashMap<>(Map.of(
+                "season", FeatureValue.string("summer"),
+                "issueType", FeatureValue.string("painting"),
+                "estimatedCost", FeatureValue.number(500),
+                "actorTrustScore", FeatureValue.number(0.2)));
+        var steps = rule.adapt(scored, current);
+        assertTrue(steps.stream().anyMatch(s -> s.reason() != null && s.reason().toLowerCase().contains("trust")));
+    }
+
+    @Test
+    void lowDeadlineReliability_boostsSentinel() {
+        var past = new PlanCbrCase("p", "s", "COMPLETED", 0.9,
+                                   Map.of("estimatedCost", FeatureValue.number(1000)),
+                                   List.of(new PlanTrace("b1", "schedule-inspection", "w1", "ok", 5, Map.of()),
+                                           new PlanTrace("b2", "maintenance-sentinel", "w2", "ok", 3, Map.of())));
+        var scored = new ScoredCbrCase<>(past, "c1", 0.85);
+        Map<String, FeatureValue> current = new java.util.LinkedHashMap<>(Map.of(
+                "estimatedCost", FeatureValue.number(1000),
+                "actorDeadlineReliability", FeatureValue.number(0.3)));
+        var steps = rule.adapt(scored, current);
+        var sentinel = steps.stream()
+                            .filter(s -> "maintenance-sentinel".equals(s.capabilityName())).findFirst().orElseThrow();
+        assertEquals(AdaptationAction.BOOSTED, sentinel.action());
+        assertTrue(sentinel.reason().toLowerCase().contains("deadline"));
+    }
+
+
     private ScoredCbrCase<PlanCbrCase> scored(Map<String, FeatureValue> features) {
         return new ScoredCbrCase<>(
                 new PlanCbrCase("problem", "solution", "COMPLETED", 0.9, features,

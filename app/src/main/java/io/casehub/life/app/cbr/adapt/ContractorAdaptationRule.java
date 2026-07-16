@@ -38,52 +38,70 @@ public class ContractorAdaptationRule implements LifeAdaptationRule {
     @Override
     public List<AdaptedStep> adapt(ScoredCbrCase<PlanCbrCase> retrieved,
                                    Map<String, FeatureValue> currentFeatures) {
-        PlanCbrCase past = retrieved.cbrCase();
-        String currentSeason = stringFeature(currentFeatures, "season");
-        String currentProblemType = stringFeature(currentFeatures, "problemType");
-        double currentBudget = numericFeature(currentFeatures, "budget");
-        double pastBudget = numericFeature(past.features(), "budget");
-        boolean pastFailed = "FAILED".equals(past.outcome());
+        PlanCbrCase past                = retrieved.cbrCase();
+        String      currentSeason       = stringFeature(currentFeatures, "season");
+        String      currentProblemType  = stringFeature(currentFeatures, "problemType");
+        double      currentBudget       = numericFeature(currentFeatures, "budget");
+        double      pastBudget          = numericFeature(past.features(), "budget");
+        boolean     pastFailed          = "FAILED".equals(past.outcome());
+        double      trustScore          = numericFeature(currentFeatures, "actorTrustScore");
+        double      deadlineReliability = numericFeature(currentFeatures, "actorDeadlineReliability");
 
         List<AdaptedStep> steps = new ArrayList<>();
         for (PlanTrace trace : past.planTrace()) {
             if (pastFailed && !"contractor-sentinel".equals(trace.capabilityName())) {
                 steps.add(new AdaptedStep(trace.bindingName(), trace.capabilityName(),
-                        trace.workerName(), trace.stepOutcome(), trace.priority(),
-                        trace.parameters(), AdaptationAction.SUPPRESSED,
-                        "Past case with this approach failed"));
+                                          trace.workerName(), trace.stepOutcome(), trace.priority(),
+                                          trace.parameters(), AdaptationAction.SUPPRESSED,
+                                          "Past case with this approach failed"));
                 continue;
             }
 
             boolean isWinterUrgent = "winter".equalsIgnoreCase(currentSeason)
-                    && WINTER_PROBLEM_TYPES.contains(currentProblemType.toLowerCase());
+                                     && WINTER_PROBLEM_TYPES.contains(currentProblemType.toLowerCase());
 
             if ("request-quote".equals(trace.capabilityName()) && isWinterUrgent) {
-                Map<String, Object> params = new LinkedHashMap<>(trace.parameters());
-                double pastSla = numericFeature(past.features(), "slaHours");
+                Map<String, Object> params  = new LinkedHashMap<>(trace.parameters());
+                double              pastSla = numericFeature(past.features(), "slaHours");
                 if (pastSla > 0) {
                     params.put("slaHours", (int) Math.max(24, pastSla / 2));
                 }
                 steps.add(new AdaptedStep(trace.bindingName(), trace.capabilityName(),
-                        trace.workerName(), trace.stepOutcome(),
-                        Math.min(trace.priority() + 2, 10), params,
-                        AdaptationAction.BOOSTED,
-                        "Winter " + currentProblemType + " — tighter SLA needed"));
+                                          trace.workerName(), trace.stepOutcome(),
+                                          Math.min(trace.priority() + 2, 10), params,
+                                          AdaptationAction.BOOSTED,
+                                          "Winter " + currentProblemType + " — tighter SLA needed"));
                 continue;
             }
 
-            Map<String, Object> params = adjustCostParams(trace, currentBudget, pastBudget);
+            Map<String, Object> params   = adjustCostParams(trace, currentBudget, pastBudget);
+            int                 priority = trace.priority();
+            AdaptationAction    action   = AdaptationAction.RETAINED;
+            String              reason   = null;
+
             if (params != null) {
-                steps.add(new AdaptedStep(trace.bindingName(), trace.capabilityName(),
-                        trace.workerName(), trace.stepOutcome(), trace.priority(),
-                        params, AdaptationAction.RETAINED,
-                        "Budget scaled by %.0f%%".formatted(
-                                ((currentBudget / pastBudget) - 1) * 100)));
+                reason = "Budget scaled by %.0f%%".formatted(
+                        ((currentBudget / pastBudget) - 1) * 100);
             } else {
-                steps.add(new AdaptedStep(trace.bindingName(), trace.capabilityName(),
-                        trace.workerName(), trace.stepOutcome(), trace.priority(),
-                        trace.parameters(), AdaptationAction.RETAINED, null));
+                params = trace.parameters();
             }
+
+            if (trustScore > 0 && trustScore < 0.3) {
+                reason = appendReason(reason,
+                                      "Actor trust critically low (%.2f) — consider alternative contractor".formatted(trustScore));
+            }
+
+            if (deadlineReliability > 0 && deadlineReliability < 0.5
+                && "watchdog-escalation".equals(trace.capabilityName())) {
+                priority = Math.min(priority + 2, 10);
+                action   = AdaptationAction.BOOSTED;
+                reason   = appendReason(reason,
+                                        "Low deadline reliability (%.2f) — tighter escalation".formatted(deadlineReliability));
+            }
+
+            steps.add(new AdaptedStep(trace.bindingName(), trace.capabilityName(),
+                                      trace.workerName(), trace.stepOutcome(), priority,
+                                      params, action, reason));
         }
         return steps;
     }
@@ -97,6 +115,11 @@ public class ContractorAdaptationRule implements LifeAdaptationRule {
         params.put("budgetRatio", Math.round(ratio * 100) / 100.0);
         return params;
     }
+
+    private static String appendReason(String existing, String addition) {
+        return existing != null ? existing + "; " + addition : addition;
+    }
+
 
     private static String stringFeature(Map<String, FeatureValue> features, String key) {
         FeatureValue fv = features.get(key);
