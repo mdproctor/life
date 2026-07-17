@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.casehub.api.spi.CaseOutcomeEvent;
 import io.casehub.api.spi.CaseOutcomeObserver;
 import io.casehub.neocortex.memory.MemoryDomain;
+import io.casehub.platform.api.path.Path;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.PlanCbrCase;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -64,7 +65,8 @@ public class LifeCaseOutcomeCbrWriter implements CaseOutcomeObserver {
                     descProvider.extractEntityId(event.caseFileSnapshot(), event.caseId()),
                     new MemoryDomain(result.config().domain()),
                     TENANT_ID,
-                    event.caseId().toString());
+                    event.caseId().toString(),
+                    Path.parse(result.config().domain()));
 
         } catch (Exception e) {
             LOG.warnf(e, "CBR retention failed for case %s (%s) — proceeding without recording",

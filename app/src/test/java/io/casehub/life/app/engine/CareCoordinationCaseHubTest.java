@@ -15,22 +15,23 @@
  */
 package io.casehub.life.app.engine;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import io.casehub.api.model.HumanTaskTarget;
-import io.casehub.life.api.LifeCaseType;
+import io.casehub.api.model.SubCaseMapping;
 import io.casehub.api.model.SubCaseTarget;
 import io.casehub.api.model.evaluator.JQExpressionEvaluator;
+import io.casehub.api.spi.routing.CandidateSetSpec;
+import io.casehub.api.spi.routing.StaticSetStrategy;
+import io.casehub.life.api.LifeCaseType;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
-import io.casehub.api.spi.routing.CandidateSetSpec;
-import io.casehub.api.spi.routing.StaticSetStrategy;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Definition test for the care-coordination CaseHub.
@@ -110,18 +111,20 @@ class CareCoordinationCaseHubTest {
     @Test
     void careEpisodeIsSubCase() {
         var binding = caseHub.getDefinition().getBindings().stream()
-                .filter(b -> "care-episode".equals(b.getName()))
-                .findFirst()
-                .orElseThrow();
+                             .filter(b -> "care-episode".equals(b.getName()))
+                             .findFirst()
+                             .orElseThrow();
         assertTrue(binding.target() instanceof SubCaseTarget,
-                "care-episode binding should be SubCaseTarget");
+                   "care-episode binding should be SubCaseTarget");
         var subCase = ((SubCaseTarget) binding.target()).subCase();
         assertEquals("casehub-life", subCase.namespace());
         assertEquals("care-episode", subCase.name());
         assertEquals("1.0.0", subCase.version());
         assertTrue(subCase.waitForCompletion());
-        assertEquals("{ careRequest: .careRequest, carePlan: .carePlan }", subCase.inputMapping());
-        assertEquals("{ episodeResult: . }", subCase.outputMapping());
+        assertTrue(subCase.inputMapping() instanceof SubCaseMapping.Expression inputExpr
+                   && "{ careRequest: .careRequest, carePlan: .carePlan }".equals(inputExpr.expression()));
+        assertTrue(subCase.outputMapping() instanceof SubCaseMapping.Expression outputExpr
+                   && "{ episodeResult: . }".equals(outputExpr.expression()));
     }
 
     @Test

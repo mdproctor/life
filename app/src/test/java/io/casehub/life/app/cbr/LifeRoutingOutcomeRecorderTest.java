@@ -6,6 +6,7 @@ import io.casehub.api.model.cbr.CbrConfig;
 import io.casehub.api.spi.routing.AgentRoutingContext;
 import io.casehub.api.spi.routing.RoutingOutcome;
 import io.casehub.neocortex.memory.MemoryDomain;
+import io.casehub.platform.api.path.Path;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.FeatureValue;
 import io.casehub.neocortex.memory.cbr.PlanCbrCase;
@@ -83,7 +84,8 @@ class LifeRoutingOutcomeRecorderTest {
                 eq("agent-routing"),
                 eq(new MemoryDomain("casehubio/life/contractor")),
                 eq("test-tenant"),
-                eq(caseId.toString()));
+                eq(caseId.toString()),
+                eq(Path.parse("casehubio/life/contractor")));
 
         PlanCbrCase stored = caseCaptor.getValue();
         assertThat(stored.outcome()).isEqualTo("SUCCESS");
@@ -139,7 +141,7 @@ class LifeRoutingOutcomeRecorderTest {
         when(featureExtractor.extract(eq("contractor-coordination"), eq(contextJson)))
                 .thenReturn(Optional.of(new LifeCbrFeatureExtractor.ExtractionResult(
                         config, Map.of("problemType", FeatureValue.string("x")))));
-        when(cbrStore.store(any(), any(), any(), any(), any(), any()))
+        when(cbrStore.store(any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("boom"));
 
         var context = new AgentRoutingContext(
@@ -171,7 +173,7 @@ class LifeRoutingOutcomeRecorderTest {
                 .await().indefinitely();
 
         var captor = ArgumentCaptor.forClass(PlanCbrCase.class);
-        verify(cbrStore).store(captor.capture(), any(), any(), any(), any(), any());
+        verify(cbrStore).store(captor.capture(), any(), any(), any(), any(), any(), any());
         assertThat(captor.getValue().planTrace().get(0).stepOutcome()).isEqualTo("GATE_REJECTED");
     }
 }

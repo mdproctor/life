@@ -6,6 +6,7 @@ import io.casehub.api.model.cbr.CbrConfig;
 import io.casehub.api.spi.CaseOutcomeEvent;
 import io.casehub.life.app.cbr.describe.ContractorCoordinationDescriptionProvider;
 import io.casehub.neocortex.memory.MemoryDomain;
+import io.casehub.platform.api.path.Path;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.FeatureValue;
 import io.casehub.neocortex.memory.cbr.PlanCbrCase;
@@ -77,7 +78,8 @@ class LifeCaseOutcomeCbrWriterTest {
                 eq("ext-123"),
                 eq(new MemoryDomain("casehubio/life/contractor")),
                 eq("life-personal"),
-                eq(event.caseId().toString()));
+                eq(event.caseId().toString()),
+                eq(Path.parse("casehubio/life/contractor")));
 
         PlanCbrCase stored = caseCaptor.getValue();
         assertThat(stored.outcome()).isEqualTo("COMPLETED");
@@ -118,7 +120,7 @@ class LifeCaseOutcomeCbrWriterTest {
         when(featureExtractor.extract(eq("contractor-coordination"), any(JsonNode.class)))
                 .thenReturn(Optional.of(new LifeCbrFeatureExtractor.ExtractionResult(
                         config, Map.of("problemType", FeatureValue.string("boiler-repair")))));
-        when(cbrStore.store(any(), any(), any(), any(), any(), any()))
+        when(cbrStore.store(any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("store failure"));
 
         var event = new CaseOutcomeEvent(
@@ -148,7 +150,7 @@ class LifeCaseOutcomeCbrWriterTest {
         writer.onOutcome(event);
 
         var caseCaptor = ArgumentCaptor.forClass(PlanCbrCase.class);
-        verify(cbrStore).store(caseCaptor.capture(), any(), any(), any(), any(), any());
+        verify(cbrStore).store(caseCaptor.capture(), any(), any(), any(), any(), any(), any());
         assertThat(caseCaptor.getValue().outcome()).isEqualTo("FAULTED");
     }
 }

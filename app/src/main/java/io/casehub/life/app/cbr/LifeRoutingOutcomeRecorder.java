@@ -7,6 +7,7 @@ import io.casehub.api.spi.routing.RoutingOutcome;
 import io.casehub.api.spi.routing.RoutingOutcomeRecorder;
 import io.casehub.life.app.entity.LifeCaseTracker;
 import io.casehub.neocortex.memory.MemoryDomain;
+import io.casehub.platform.api.path.Path;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.PlanCbrCase;
 import io.casehub.neocortex.memory.cbr.PlanTrace;
@@ -84,11 +85,12 @@ public class LifeRoutingOutcomeRecorder implements RoutingOutcomeRecorder {
                               "agent-routing",
                               new MemoryDomain(result.config().domain()),
                               context.tenancyId(),
-                              context.caseId().toString());
+                              context.caseId().toString(),
+                              Path.parse(result.config().domain()));
 
                       return null;
                   })
-                  .emitOn(Infrastructure.getDefaultWorkerPool())
+                  .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
                   .onFailure().recoverWithItem(failure -> {
                     LOG.warnf(failure, "CBR routing retention failed — proceeding without recording");
                     return null;

@@ -7,6 +7,7 @@ import io.casehub.life.api.CbrSuggestions;
 import io.casehub.life.api.FeatureStatistics;
 import io.casehub.life.api.LifeCaseType;
 import io.casehub.neocortex.memory.MemoryDomain;
+import io.casehub.platform.api.path.Path;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.FeatureValue;
@@ -43,35 +44,35 @@ public class LifeCbrSuggestionService {
     public CbrSuggestions suggest(LifeCaseType caseType, Map<String, Object> initialContext) {
         try {
             JsonNode contextNode = objectMapper.valueToTree(initialContext);
-            var extraction = featureExtractor.extract(caseType.caseName(), contextNode);
-            if (extraction.isEmpty()) return CbrSuggestions.EMPTY;
+            var      extraction  = featureExtractor.extract(caseType.caseName(), contextNode);
+            if (extraction.isEmpty()) {return CbrSuggestions.EMPTY;}
 
-            var result = extraction.get();
+            var       result = extraction.get();
             CbrConfig config = result.config();
 
             CbrQuery query = CbrQuery.of(
-                    TENANT_ID,
-                    new MemoryDomain(config.domain()),
-                    caseType.caseName(),
-                    result.features(),
-                    config.topK())
-                .withWeights(config.weights())
-                .withMinSimilarity(config.minSimilarity())
-                .withVectorWeight(config.vectorWeight());
+                                             TENANT_ID,
+                                             new MemoryDomain(config.domain()),
+                                             Path.parse(config.domain()),
+                                             caseType.caseName(),
+                                             result.features(),
+                                             config.topK())
+                                     .withWeights(config.weights())
+                                     .withMinSimilarity(config.minSimilarity())
+                                     .withVectorWeight(config.vectorWeight());
 
             List<ScoredCbrCase<PlanCbrCase>> cases = cbrStore.retrieveSimilar(query, PlanCbrCase.class);
-            if (cases.size() < 2) return CbrSuggestions.EMPTY;
+            if (cases.size() < 2) {return CbrSuggestions.EMPTY;}
 
-            Map<String, FeatureStatistics> featureStats = computeFeatureStats(cases);
-            double successRate = computeSuccessRate(cases);
-            double avgSimilarity = cases.stream().mapToDouble(ScoredCbrCase::score).average().orElse(0.0);
+            Map<String, FeatureStatistics> featureStats  = computeFeatureStats(cases);
+            double                         successRate   = computeSuccessRate(cases);
+            double                         avgSimilarity = cases.stream().mapToDouble(ScoredCbrCase::score).average().orElse(0.0);
 
             return new CbrSuggestions(featureStats, successRate, cases.size(), avgSimilarity);
         } catch (Exception e) {
             LOG.warnf(e, "CBR suggestion failed for %s — returning empty", caseType);
             return CbrSuggestions.EMPTY;
-        }
-    }
+        }}
 
     public LifeCbrRetrievalResult retrieveForAdaptation(LifeCaseType caseType,
                                                         Map<String, Object> initialContext) {
@@ -86,6 +87,7 @@ public class LifeCbrSuggestionService {
             CbrQuery query = CbrQuery.of(
                                              TENANT_ID,
                                              new MemoryDomain(config.domain()),
+                                             Path.parse(config.domain()),
                                              caseType.caseName(),
                                              result.features(),
                                              config.topK())
@@ -108,8 +110,7 @@ public class LifeCbrSuggestionService {
         } catch (Exception e) {
             LOG.warnf(e, "CBR retrieval for adaptation failed for %s — returning empty", caseType);
             return LifeCbrRetrievalResult.EMPTY;
-        }
-    }
+        }}
 
 
     private Map<String, FeatureStatistics> computeFeatureStats(List<ScoredCbrCase<PlanCbrCase>> cases) {
