@@ -1,22 +1,26 @@
 package io.casehub.life.app;
 
+import io.casehub.work.runtime.service.ExpiryLifecycleService;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.security.TestSecurity;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
-import static org.awaitility.Awaitility.await;
 import static org.hamcrest.Matchers.*;
 
 @QuarkusTest
 @TestSecurity(user = "household-admin", roles = {"household-admin"})
 class LifeTaskResourceTest {
+
+    @Inject
+    ExpiryLifecycleService expiryService;
 
     @BeforeEach
     @Transactional
@@ -99,13 +103,12 @@ class LifeTaskResourceTest {
                 .then().statusCode(201)
                 .extract().path("workItemId");
 
-        // Quartz ExpiryTimerJob fires automatically for past deadlines.
-        // LifeSlaBreachPolicy escalates to household-admin on first breach.
-        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() ->
-                given()
-                        .when().get("/life-tasks/" + workItemId)
-                        .then()
-                        .statusCode(200)
-                        .body("candidateGroups", hasItem("household-admin")));
+        expiryService.expireItem(UUID.fromString(workItemId));
+
+        given()
+                .when().get("/life-tasks/" + workItemId)
+                .then()
+                .statusCode(200)
+                .body("candidateGroups", hasItem("household-admin"));
     }
 }

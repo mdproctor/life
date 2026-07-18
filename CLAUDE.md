@@ -688,6 +688,8 @@ quarkus.arc.selected-alternatives=\
   io.casehub.ledger.runtime.repository.jpa.JpaActorTrustScoreRepository
 ```
 
+**SLA breach policy:** casehub-work resolves `SlaBreachPolicy` via `StrategyResolver` using config key `casehub.work.sla.breach-policy`. The default is `"no-op"` which silently disables all SLA escalation. casehub-life must set `casehub.work.sla.breach-policy=life-sla-breach` in both production and test `application.properties` to activate `LifeSlaBreachPolicy`. Without this, SLA breach escalation is completely silent — no warning, no error (GE-20260718-2fb8eb).
+
 **CurrentPrincipal resolution (since platform#112):** `OidcCurrentPrincipal @Alternative @Priority(100)` wins in production; `FixedCurrentPrincipal @Alternative @Priority(200)` wins in tests (canonical tenancyId `278776f9-e1b0-46fb-9032-8bddebdcf9ce`). No `quarkus.arc.exclude-types` entries needed for CurrentPrincipal — CDI `@Alternative @Priority` handles disambiguation. Non-alternative beans (`TenantScopedPrincipal`, `QhorusInboundCurrentPrincipal`, `MockCurrentPrincipal`, `DefaultTestPrincipal`) are superseded automatically.
 
 ---
