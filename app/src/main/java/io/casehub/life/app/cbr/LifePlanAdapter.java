@@ -8,18 +8,16 @@ import io.casehub.neocortex.memory.cbr.PlanAdapter;
 import io.casehub.neocortex.memory.cbr.PlanCbrCase;
 import io.casehub.neocortex.memory.cbr.PlanTrace;
 import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
-import jakarta.enterprise.inject.Alternative;
+import io.quarkus.arc.All;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Inject;
-import io.quarkus.arc.All;
 import org.jboss.logging.Logger;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 @Alternative
@@ -53,13 +51,13 @@ public class LifePlanAdapter implements PlanAdapter {
         }
     }
 
-    @Override
     public AdaptedPlan adapt(ScoredCbrCase<PlanCbrCase> retrieved,
                              Map<String, FeatureValue> currentFeatures) {
         String inferred = inferCaseType(retrieved.cbrCase().planTrace());
         return adapt(inferred, retrieved, currentFeatures);
     }
 
+    @Override
     public AdaptedPlan adapt(String caseType,
                              ScoredCbrCase<PlanCbrCase> retrieved,
                              Map<String, FeatureValue> currentFeatures) {

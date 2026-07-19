@@ -98,6 +98,7 @@ public class LifeCaseService {
                 adaptationEvent.fire(new CbrAdaptationRecorded(new AdaptationTrace(
                         UUID.randomUUID().toString(),
                         null,
+                        request.caseType().caseName(),
                         bestMatch.caseId(),
                         bestMatch.score(),
                         adaptedPlan.steps(),
@@ -131,13 +132,13 @@ public class LifeCaseService {
         LifeCaseTracker tracker = new LifeCaseTracker();
         tracker.id       = trackerId;
         tracker.caseType = request.caseType().caseName();
+        tracker.domain   = request.caseType().domain();
         tracker.status   = LifeCaseStatus.ACTIVE;
         tracker.persist();
 
         Map<String, Object> ctx = new HashMap<>(request.context());
         ctx.put("lifeCaseType", request.caseType().caseName());
-        return ctx;
-    }
+        return ctx;}
 
     @Transactional
     void persistCaseId(UUID trackerId, UUID caseId) {
