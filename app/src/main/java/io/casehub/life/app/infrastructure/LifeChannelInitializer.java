@@ -80,7 +80,7 @@ public class LifeChannelInitializer {
                     final Channel ch = channelService.create(reqBuilder.build());
                     channelGateway.initChannel(ch.id(), new ChannelRef(ch.id(), ch.name()));
                     final Watchdog w = Watchdog.builder(
-                                    WatchdogConditionType.APPROVAL_PENDING.name(), name)
+                                    WatchdogConditionType.APPROVAL_PENDING, name)
                             .id(UUID.randomUUID())
                             .thresholdSeconds(0)
                             .notificationChannel(name)

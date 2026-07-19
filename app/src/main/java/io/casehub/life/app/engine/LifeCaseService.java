@@ -115,7 +115,9 @@ public class LifeCaseService {
             persistCaseId(trackerId, caseId);
             caseHubRuntime.signal(caseId, "caseId", caseId.toString());
 
-            return new LifeCaseResponse(caseId, request.caseType(), LifeCaseStatus.ACTIVE);
+            return new LifeCaseResponse(caseId, request.caseType(),
+                    request.caseType().domain(), LifeCaseStatus.ACTIVE,
+                    Instant.now(), null);
         } catch (Exception e) {
             LOG.errorf(e, "Case start failed for type=%s tracker=%s", request.caseType(), trackerId);
             try {
