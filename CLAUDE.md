@@ -229,6 +229,7 @@ Read these **before designing**, not after. The concern column tells you when ea
 | Testing attestation pipeline (unit) | Mock `LedgerEntryRepository` with Mockito. Verify verdicts (SOUND/FLAGGED), capability tags, dimension scores. Guard: CREATED events produce no attestation. See `LifeOutcomeAttestationWriterTest`. |
 | Trust routing policy provider | `@QuarkusTest` — inject `TrustRoutingPolicyProvider`, verify capability→domain resolution, YAML blend factors and quality floors. See `LifeTrustRoutingPolicyProviderTest`. |
 | Testing `ActionRiskClassifier` | Unit tests: mock `PreferenceProvider`, use `lenient().when(...)` in `@BeforeEach` for shared stubs — NEVER/unknown types skip `resolve()` entirely, triggering `UnnecessaryStubbingException` in strict mode. `@QuarkusTest`: inject `@RiskClassifier Instance<ActionRiskClassifier>` to verify CDI qualifier wiring. See `LifeActionRiskClassifierTest`, `LifeActionRiskClassifierQuarkusTest`. |
+| Testing visibility policies in `@QuarkusTest` | `@TestSecurity` only sets `SecurityIdentity` for `@RolesAllowed`; does NOT populate `CurrentPrincipal.groups()`. Inject `FixedCurrentPrincipal`, call `setGroups()` in `@BeforeEach`, `reset()` in `@AfterEach`. Without this, visibility filters silently return empty results (HTTP 200, items.size()=0). See GE-20260719-4e2784. |
 | Testing `HumanTaskTarget.candidateGroups()` | Returns sealed `ListEvaluator`. Pattern: `ht.candidateGroups() instanceof ListEvaluator.StaticList sl && sl.values().contains("group-name")`. Import `io.casehub.api.model.evaluator.ListEvaluator`. |
 | Engine CDI wiring | `quarkus.arc.selected-alternatives` must include `MemorySubCaseGroupRepository`, `MemoryPlanItemStore`, `MemoryReactivePlanItemStore` from casehub-engine-persistence-memory (GE-20260531-1e51d4). |
 | Testing LLM-backed workers (6 LifeTypedCaseHubs + CareEpisodeCaseHub) | Use `@Alternative @Priority(10) @ApplicationScoped` test CDI bean `TestLifeOpenClawChatModelFactory` registered in `quarkus.arc.selected-alternatives` in test config. **Never use `@InjectMock`** for beans used in `configureCase()` or `augment()` — Mockito's CDI proxy reset between test classes triggers a Quarkus restart, re-registering Vert.x codecs and failing ALL subsequent `@QuarkusTest` classes. The test factory matches on system prompt key phrases (not user message text) to serve correct canned responses for all 32 workers. **Canned response values must match old stub behavioral intent** — e.g. `requiresApproval: true` when the old stub computed `totalCost > 2000`. See `TestLifeOpenClawChatModelFactory`, GE-20260626-0e976f. |
@@ -484,7 +485,7 @@ api/    — pure Java: LifeDomain enum, ExternalActor request/response records,
           Zero framework imports. No JPA.
 
 app/    — Quarkus: JPA entities (ExternalActor, LifeTaskContext, LifeCommitmentRecord,
-          LifeCaseTracker), REST resources, Flyway migrations (db/life/migration/, V100–V110),
+          LifeCaseTracker), REST resources, Flyway migrations (db/life/migration/, V100–V111),
           service layer (LifeGdprErasureService — GDPR erasure pipeline), SPI implementations (LifeSlaBreachPolicy, LifeCommitmentStrategy + 3 impls),
           infrastructure (LifeChannelInitializer), observers (LifeOversightResponseObserver,
           LifeWatchdogAlertObserver, LifeDecisionLedgerObserver, LifeCaseTrackerObserver),
@@ -499,8 +500,18 @@ app/    — Quarkus: JPA entities (ExternalActor, LifeTaskContext, LifeCommitmen
           cbr (io.casehub.life.app.cbr — LifeCaseOutcomeCbrWriter, LifeRoutingOutcomeRecorder,
           LifeCbrFeatureSchemaRegistrar, LifeCbrDescriptionProvider + 6 impls in cbr/describe/).
           read-side API (io.casehub.life.app.service — ExternalActorHistoryService,
-          PendingActionsService, LifeAnalyticsService; io.casehub.life.app.resource —
-          PendingActionsResource, LifeAnalyticsResource).
+          PendingActionsService, LifeAnalyticsService, LifeCaseQueryService;
+          io.casehub.life.app.resource — PendingActionsResource, LifeAnalyticsResource).
+          event (io.casehub.life.app.event — LifeEventBroadcaster, LifeEventBridge,
+          LifeEventSseResource; SSE CDI→broadcaster→stream bridge for real-time UI updates).
+
+life-ui/ — Lit 3.x SPA served via Quarkus Quinoa (quarkus-quinoa 2.8.3).
+           Vite build with aliases to sibling @casehubio/blocks-ui-* and
+           @casehubio/pages-* repos (not npm-published yet).
+           app-shell (hash routing), home-view (KPI dashboard), inbox-view
+           (work-item-workbench composition). Quinoa enabled only in dev/demo
+           profiles (disabled default + tests). Start with:
+           JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn quarkus:dev -pl app -Dquarkus.profile=demo
 ```
 
 ---
@@ -620,7 +631,7 @@ Layer 8: + casehub-neocortex (CBR) — Case-Based Reasoning for adaptive life au
 | OpenClaw as WorkerProvisioner | Pending — research spec 2026-05-25 |
 | CBR retention + retrieval + integration | casehub-neocortex-memory-api ✅; CaseOutcomeObserver ✅; RoutingOutcomeRecorder ✅; CbrRetrievalService ✅; LifeCbrSuggestionService ✅; CbrInputTransformer ✅ |
 | CBR-informed routing | engine#505 CLOSED ✅ — routing consumes CBR experiences; engine#707 CLOSED ✅ — experiences flow to workers |
-| CBR adaptation | PlanAdapter SPI ✅ (neocortex); LifePlanAdapter ✅ (life); 6 domain rules ✅; engine#738 OPEN — PlanAdapter wiring into CbrRetrievalService |
+| CBR adaptation | PlanAdapter SPI ✅ (neocortex); LifePlanAdapter ✅ (life); 6 domain rules ✅; engine#738 CLOSED ✅ — PlanAdapter wired into CbrRetrievalService |
 
 ---
 
@@ -670,6 +681,8 @@ JAVA_HOME=/Library/Java/JavaVirtualMachines/graalvm-25.jdk/Contents/Home  # nati
 
 **Use `mvn` not `./mvnw`** — maven wrapper not configured on this machine.
 
+**Demo profile:** `quarkus.profile=demo` activates standalone Household Hub mode. H2 in-memory, Flyway seeds at `db/life/demo/` (V9000+ range — avoids collision with domain V100+ and ledger V2100+), OIDC disabled. Start with: `JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn quarkus:dev -pl app -Dquarkus.profile=demo`
+
 **Multi-module test scoping:** Always scope Maven with `-pl <module> -am`. When combining `-am` with `-Dtest=ClassName`, add `-Dsurefire.failIfNoSpecifiedTests=false`.
 
 **Flyway critical rules:**
@@ -711,9 +724,15 @@ JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn test -pl app -Dtest=ExternalActorR
 
 # Compile only (no tests)
 JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn compile -pl api,app --batch-mode
+
+# Frontend — build life-ui (Vite)
+npm install --prefix life-ui
+npm run build --prefix life-ui
 ```
 
 **Important:** `mvn test -pl app` requires `api` to be installed in the local Maven repo first. Run `mvn install -pl api` if you get ClassNotFound errors for `io.casehub.life.api.*`.
+
+**Frontend:** life-ui uses Vite aliases to resolve `@casehubio/blocks-ui-*` and `@casehubio/pages-*` from sibling repos (`../../blocks-ui/` and `../../pages/`). Both repos must be cloned and built (`yarn build` in blocks-ui) before the Vite build will succeed.
 
 ---
 

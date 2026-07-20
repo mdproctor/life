@@ -140,7 +140,8 @@ public class LifeCaseService {
 
         Map<String, Object> ctx = new HashMap<>(request.context());
         ctx.put("lifeCaseType", request.caseType().caseName());
-        return ctx;}
+        return ctx;
+    }
 
     @Transactional
     void persistCaseId(UUID trackerId, UUID caseId) {

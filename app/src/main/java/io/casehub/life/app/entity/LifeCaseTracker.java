@@ -57,9 +57,9 @@ public class LifeCaseTracker extends PanacheEntityBase {
 
     @PrePersist
     void onPersist() {
-        if (id == null) {id = UUID.randomUUID();}
-        if (createdAt == null) {createdAt = Instant.now();}
-        if (status == null) {status = LifeCaseStatus.ACTIVE;}
+        if (id == null) id = UUID.randomUUID();
+        if (createdAt == null) createdAt = Instant.now();
+        if (status == null) status = LifeCaseStatus.ACTIVE;
     }
 
 }

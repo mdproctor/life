@@ -2,9 +2,10 @@ package io.casehub.life.app;
 
 import io.casehub.ledger.api.model.ScoreType;
 import io.casehub.ledger.runtime.model.ActorTrustScore;
-import io.casehub.life.api.LifeActorType;
 import io.casehub.life.api.LifeActorIds;
+import io.casehub.life.api.LifeActorType;
 import io.casehub.life.api.LifeCaseStatus;
+import io.casehub.life.api.LifeCaseType;
 import io.casehub.life.app.entity.ExternalActor;
 import io.casehub.life.app.entity.LifeCaseTracker;
 import io.casehub.life.app.entity.LifeTaskContext;
@@ -24,7 +25,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 
 @QuarkusTest
 @TestSecurity(user = "household-admin", roles = {"household-admin"})
@@ -238,8 +242,9 @@ class LifeAnalyticsTest {
     @Transactional
     void seedTracker(String caseType, LifeCaseStatus status, Integer resolutionHours) {
         LifeCaseTracker t = new LifeCaseTracker();
-        t.caseType = caseType;
-        t.status = status;
+        t.caseType     = caseType;
+        t.domain       = LifeCaseType.valueOf(caseType.toUpperCase().replace('-', '_')).domain();
+        t.status       = status;
         t.engineCaseId = UUID.randomUUID();
         if (resolutionHours != null) {
             t.createdAt = Instant.now().minus(resolutionHours, ChronoUnit.HOURS);
