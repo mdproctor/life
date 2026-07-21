@@ -53,7 +53,7 @@ class FamilyVoteCaseHubTest {
         assertThat(def.getGoals()).hasSize(1);
         Goal voteCast = def.getGoals().iterator().next();
         assertThat(voteCast.getName()).isEqualTo("vote-cast");
-        assertThat(voteCast.getKind()).isEqualTo(GoalKind.SUCCESS);
+        assertThat(voteCast.getKind()).isEqualTo(GoalKind.SUCCESS.value());
         assertTrue(voteCast.getCondition() instanceof JQExpressionEvaluator jq
                         && jq.expression().contains(".vote != null"),
                 "Goal condition should check .vote != null");

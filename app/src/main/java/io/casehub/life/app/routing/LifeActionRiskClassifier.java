@@ -4,13 +4,13 @@ import io.casehub.api.spi.ActionRiskClassifier;
 import io.casehub.api.spi.ClassificationContext;
 import io.casehub.api.spi.RiskClassifier;
 import io.casehub.api.spi.RiskDecision;
-import io.casehub.worker.api.PlannedAction;
 import io.casehub.life.api.HouseholdActionType;
 import io.casehub.life.api.HouseholdGroups;
 import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.casehub.platform.api.preferences.PreferenceProvider;
 import io.casehub.platform.api.preferences.Preferences;
 import io.casehub.platform.api.preferences.SettingsScope;
+import io.casehub.worker.api.PlannedAction;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.inject.Inject;
@@ -101,13 +101,13 @@ public class LifeActionRiskClassifier implements ActionRiskClassifier {
     private RiskDecision.GateRequired buildGate(HouseholdActionType type, PlannedAction action, Preferences prefs) {
         long hours = (long) prefs.get(LifeRiskPolicyKeys.APPROVAL_EXPIRES_HOURS).value();
         return new RiskDecision.GateRequired(
-            buildReason(type, action),
-            type.reversible(),
-            type.candidateGroups(),
-            Duration.ofHours(hours),
-            OVERSIGHT_SCOPE
-        );
-    }
+                buildReason(type, action),
+                type.reversible(),
+                type.candidateGroups(),
+                Duration.ofHours(hours),
+                OVERSIGHT_SCOPE,
+                null
+        );}
 
     private String buildReason(HouseholdActionType type, PlannedAction action) {
         return type.reasonTemplate().formatted(formatAmount(action.parameters()));

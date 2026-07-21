@@ -73,7 +73,7 @@ class AppointmentCycleCaseDefinitionsTest {
         CaseDefinition def = AppointmentCycleCaseDefinitions.appointmentCycle();
         assertEquals(1, def.getGoals().size());
         assertEquals("appointment-complete", def.getGoals().get(0).getName());
-        assertEquals(GoalKind.SUCCESS, def.getGoals().get(0).getKind());
+        assertEquals(GoalKind.SUCCESS.value(), def.getGoals().get(0).getKind());
     }
 
     @Test

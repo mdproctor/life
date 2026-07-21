@@ -84,7 +84,7 @@ class TravelPlanCaseDefinitionsTest {
         CaseDefinition def = TravelPlanCaseDefinitions.travelPlan();
         assertEquals(1, def.getGoals().size());
         assertEquals("trip-booked", def.getGoals().get(0).getName());
-        assertEquals(GoalKind.SUCCESS, def.getGoals().get(0).getKind());
+        assertEquals(GoalKind.SUCCESS.value(), def.getGoals().get(0).getKind());
     }
 
     @Test
