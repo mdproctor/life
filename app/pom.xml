@@ -201,7 +201,7 @@
     <!-- @InjectMock — replaces CDI beans with Mockito mocks in @QuarkusTest -->
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5-mockito</artifactId>
+      <artifactId>quarkus-junit-mockito</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
