@@ -141,7 +141,8 @@ class LifeCaseResourceTest {
                 .when().get("/life-cases")
                 .then()
                 .statusCode(200)
-                .body("items.size()", is(0));
+                .body("items.size()", is(0))
+                .body("totalCount", is(0));
     }
 
     private static void seedTracker(UUID id, String caseType, LifeDomain domain, LifeCaseStatus status) {

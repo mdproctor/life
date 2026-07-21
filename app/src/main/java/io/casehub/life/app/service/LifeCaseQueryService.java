@@ -9,7 +9,6 @@ import io.casehub.life.api.response.PagedResponse;
 import io.casehub.life.api.spi.LifeCaseVisibilityPolicy;
 import io.casehub.life.app.entity.LifeCaseTracker;
 import io.casehub.platform.api.identity.CurrentPrincipal;
-import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -31,23 +30,26 @@ public class LifeCaseQueryService {
 
     @Transactional
     public PagedResponse<LifeCaseResponse> listCases(LifeDomain domain,
-                                                      LifeCaseStatus status,
-                                                      LifeCaseType caseType,
-                                                      int page, int size) {
+                                                     LifeCaseStatus status,
+                                                     LifeCaseType caseType,
+                                                     int page, int size) {
         QueryParts query = buildListQuery(domain, status, caseType);
-        long total = LifeCaseTracker.count(query.hql(), query.params());
-        List<LifeCaseTracker> trackers = LifeCaseTracker.find(query.hql(),
-                        Sort.by("createdAt", Sort.Direction.Descending), query.params())
-                .page(Page.of(page, size))
-                .list();
+        List<LifeCaseTracker> allTrackers = LifeCaseTracker.find(query.hql(),
+                                                                 Sort.by("createdAt", Sort.Direction.Descending), query.params())
+                                                           .list();
 
-        String actorId = currentPrincipal.actorId();
-        Set<String> groups = currentPrincipal.groups();
+        String      actorId = currentPrincipal.actorId();
+        Set<String> groups  = currentPrincipal.groups();
 
-        List<LifeCaseResponse> items = trackers.stream()
-                .map(this::toResponse)
-                .filter(r -> visibilityPolicy.isVisible(r, actorId, groups))
-                .toList();
+        List<LifeCaseResponse> visible = allTrackers.stream()
+                                                    .map(this::toResponse)
+                                                    .filter(r -> visibilityPolicy.isVisible(r, actorId, groups))
+                                                    .toList();
+
+        long                   total     = visible.size();
+        int                    fromIndex = Math.min(page * size, visible.size());
+        int                    toIndex   = Math.min(fromIndex + size, visible.size());
+        List<LifeCaseResponse> items     = visible.subList(fromIndex, toIndex);
 
         return new PagedResponse<>(items, page, size, total);
     }
