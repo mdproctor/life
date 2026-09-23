@@ -26,7 +26,7 @@ import jakarta.ws.rs.QueryParam;
 import java.util.List;
 import java.util.UUID;
 
-@McpDomain(value = "life/actors", basePath = "/api/life/actors")
+@McpDomain(value = "life/actors", app = "life", basePath = "/api/life/actors")
 @ApplicationScoped
 public class LifeExternalActorApi {
 

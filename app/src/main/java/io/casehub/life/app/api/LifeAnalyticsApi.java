@@ -12,7 +12,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.QueryParam;
 
-@McpDomain(value = "life/analytics", basePath = "/api/life/analytics")
+@McpDomain(value = "life/analytics", app = "life", basePath = "/api/life/analytics")
 @ApplicationScoped
 public class LifeAnalyticsApi {
 

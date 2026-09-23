@@ -14,7 +14,7 @@ import jakarta.inject.Inject;
 
 import java.util.Set;
 
-@McpDomain(value = "life/events", basePath = "/events")
+@McpDomain(value = "life/events", app = "life", basePath = "/events")
 @ApplicationScoped
 public class LifeEventStreamApi {
 

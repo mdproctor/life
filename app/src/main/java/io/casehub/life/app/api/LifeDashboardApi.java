@@ -17,7 +17,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.QueryParam;
 
-@McpDomain(value = "life/dashboard", basePath = "/api/life/dashboard")
+@McpDomain(value = "life/dashboard", app = "life", basePath = "/api/life/dashboard")
 @ApplicationScoped
 public class LifeDashboardApi {
 
