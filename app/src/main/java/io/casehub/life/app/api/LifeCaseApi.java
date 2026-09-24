@@ -30,7 +30,7 @@ import jakarta.ws.rs.QueryParam;
 import java.util.List;
 import java.util.UUID;
 
-@McpDomain(value = "life/cases", app = "life", basePath = "/api/life/cases")
+@McpDomain(value = "life/cases", app = "life", basePath = "/api/life/cases", summary = "Life case management — long-running personal cases")
 @ApplicationScoped
 public class LifeCaseApi {
 

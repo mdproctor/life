@@ -19,7 +19,7 @@ import jakarta.ws.rs.WebApplicationException;
 
 import java.util.UUID;
 
-@McpDomain(value = "life/tasks", app = "life", basePath = "/api/life/tasks")
+@McpDomain(value = "life/tasks", app = "life", basePath = "/api/life/tasks", summary = "Life task management — create, complete, schedule, prioritize")
 @ApplicationScoped
 public class LifeTaskApi {
 
