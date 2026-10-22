@@ -336,7 +336,7 @@ Lit 3.x single-page application served via Quarkus Quinoa (2.8.3). Hash-routed a
 | Dashboard (`home-view`) | KPI metrics (active cases by domain, SLA compliance, pending actions), case statistics |
 | Inbox (`inbox-view`) | Work-item-workbench composition -- filterable inbox with detail pane |
 
-**Build:** Vite with aliases resolving `@casehubio/blocks-ui-*` and `@casehubio/pages-*` from Maven SNAPSHOT artifacts (extracted to `.casehub-packages/` via `mvn initialize`). No npm cross-repo `file:` references.
+**Build:** Vite with aliases resolving `@casehubio/agency-ui-*` and `@casehubio/pages-*` from Maven SNAPSHOT artifacts (extracted to `.casehub-packages/` via `mvn initialize`). No npm cross-repo `file:` references.
 
 **Profiles:** Quinoa disabled by default (`quarkus.quinoa.enabled=false`) and in tests. Enabled in `dev` and `demo` profiles only.
 

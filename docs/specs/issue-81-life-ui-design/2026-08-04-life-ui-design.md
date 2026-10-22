@@ -341,7 +341,7 @@ The full engine stack is not required for demo mode.
 | Layer | Technology |
 |-------|-----------|
 | Frontend | Lit 3.x (Web Components) |
-| Components | blocks-ui (`@casehubio/blocks-ui-*`) via `.casehub-packages/` |
+| Components | blocks-ui (`@casehubio/agency-ui-*`) via `.casehub-packages/` |
 | Tokens | `@casehubio/pages-ui-tokens` (OKLCH scales, spacing, typography) |
 | Build | Vite (via Quinoa) |
 | Serving | Quarkus + Quinoa (`quarkus.profile=demo`) |

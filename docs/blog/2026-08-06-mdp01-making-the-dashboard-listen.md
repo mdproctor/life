@@ -26,7 +26,7 @@ The SSE infrastructure was already built on the backend — `LifeEventBroadcaste
 
 ## Two SSE clients, only one does SSE
 
-The pages platform has two event-streaming abstractions. `EventStreamController` in `@casehubio/blocks-ui-core` is a Lit Reactive Controller with lifecycle management — exactly what you'd reach for. The name says "event stream," it auto-connects on mount, auto-disconnects on unmount. But it wraps `EventStream` → `EventConnection` → `new WebSocket()`. It's a WebSocket client with an SSE-sounding name.
+The pages platform has two event-streaming abstractions. `EventStreamController` in `@casehubio/agency-ui-core` is a Lit Reactive Controller with lifecycle management — exactly what you'd reach for. The name says "event stream," it auto-connects on mount, auto-disconnects on unmount. But it wraps `EventStream` → `EventConnection` → `new WebSocket()`. It's a WebSocket client with an SSE-sounding name.
 
 The actual SSE utility is `SSEManager` in `@casehubio/pages-data/dist/sse/`, using native `EventSource` with connection pooling, exponential backoff reconnection, and RAF-batched dispatch. This is what life-ui needs — the backend serves standard SSE, not a WebSocket topic protocol.
 

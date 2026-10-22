@@ -122,7 +122,7 @@ RBAC and ACL layer on top — full discovery, authorized execution.
 ### 2.6 UI Composition
 
 IoT and other repos are developing web components (Lit, Quinoa). Life-ui already
-composes from `@casehubio/blocks-ui-*` and `@casehubio/pages-*`. IoT device panels,
+composes from `@casehubio/agency-ui-*` and `@casehubio/pages-*`. IoT device panels,
 sensor dashboards, and control UIs are another composition source.
 
 Response data structures must be compatible with what IoT's UI components expect.

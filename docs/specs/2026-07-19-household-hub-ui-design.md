@@ -44,7 +44,7 @@ domain model and UI; only the data source layer differs.
 **P3 — Compose from blocks-ui.**
 Views are compositions of reusable blocks-ui Web Components wired to REST/SSE
 endpoints. New components are built in blocks-ui (not locally) and consumed via
-`@casehubio/blocks-ui-*` packages. Life-specific compositions live in life-ui.
+`@casehubio/agency-ui-*` packages. Life-specific compositions live in life-ui.
 
 **P4 — Conversational for interaction, structured for observation.**
 Dashboards, inboxes, and reports are structured views — you scan them visually.
@@ -120,7 +120,7 @@ black box.
 | Layer | Technology |
 |-------|-----------|
 | Frontend framework | Lit 3.x (Web Components) |
-| Component library | blocks-ui (`@casehubio/blocks-ui-*`) |
+| Component library | blocks-ui (`@casehubio/agency-ui-*`) |
 | Design tokens | `@casehubio/pages-ui-tokens` (OKLCH scales, spacing, typography) |
 | Build / dev server | Vite (via Quinoa) |
 | Backend serving | Quarkus + Quinoa |
@@ -143,7 +143,7 @@ life/
     │   └── adapters/     — endpoint wiring, SSE subscriptions, conversational bridge
     ├── index.html
     ├── vite.config.ts
-    └── package.json      — depends on @casehubio/blocks-ui-* packages
+    └── package.json      — depends on @casehubio/agency-ui-* packages
 ```
 
 **Build integration:** Quinoa plugin in `app/pom.xml` with `quarkus.quinoa.ui-dir=../life-ui`.
