@@ -16,3 +16,5 @@ packages
 .worktrees/
 .claude/
 
+# IntelliJ IDE
+*.iml
